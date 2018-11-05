@@ -1,0 +1,30 @@
+Source: rebootmgr
+Maintainer: Dennis Kuhn <d.kuhn@syseleven.de>
+Section: python
+Priority: optional
+Build-Depends: debhelper (>= 9), 
+               python3-setuptools (>= 0.6b3), 
+               python3-consul,
+               python3-requests,
+               python3-urllib3,
+               python3-click,
+               python3-colorlog,
+               python3-retrying,
+               python3-all,
+               dh-systemd,
+               dh-python
+X-Python3-Version: >= 3.2
+Standards-Version: 3.9.7
+Homepage: https://gitlab.syseleven.de/openstack/underlay/tree/master/rebootmgr
+
+Package: rebootmgr
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends}, python3-consul-lib, python3-holidays
+Conflicts: update-notifier-common
+Description: Rebootmgr
+ Rebootmgr reboots a single node. Rebootmgr checks all 
+ consul checks with the tag "rebootmgr" and executes all task
+ in /etc/rebootmgr/post_boot_tasks or /etc/rebootmgr/pre_boot_tasks
+ .
+ This package contains the binary in /usr/bin and
+ systemd service.

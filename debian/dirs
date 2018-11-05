@@ -1,0 +1,2 @@
+/etc/rebootmgr/post_boot_tasks
+/etc/rebootmgr/pre_boot_tasks
