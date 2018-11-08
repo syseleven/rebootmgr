@@ -15,7 +15,9 @@ setup(
         "colorlog",
         "python-consul",
         "requests",
-        "retrying"
+        "retrying",
+        "holidays",
+        "consul_lib",
     ],
     entry_points="""
         [console_scripts]

@@ -1,0 +1,49 @@
+version: "3"
+services:
+  integration_tests_py35:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: 3.5
+    volumes:
+      - .:/src
+    depends_on: [consul1, consul2, consul3, consul4]
+    command:
+      ["tox", "-e", "py35"]
+  integration_tests_py36:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: 3.6
+    volumes:
+      - .:/src
+    depends_on: [consul1, consul2, consul3, consul4]
+    command:
+      ["tox", "-e", "py36"]
+  integration_tests_py37:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: 3.7
+    volumes:
+      - .:/src
+    depends_on: [consul1, consul2, consul3, consul4]
+    command:
+      ["tox", "-e", "py37"]
+  consul1:
+    image: consul:1.3.0
+    ports:
+      - 8500:8500
+    command: 'agent -client=0.0.0.0 -datacenter=test -server -bootstrap -node=consul1 -ui'
+  consul2:
+    image: consul:1.3.0
+    command: 'agent -client=0.0.0.0 -datacenter=test -retry-join consul1 -retry-interval 1s -node=consul2'
+  consul3:
+    image: consul:1.3.0
+    command: 'agent -client=0.0.0.0 -datacenter=test -retry-join consul1 -retry-interval 1s -node=consul3'
+  consul4:
+    image: consul:1.3.0
+    command: 'agent -client=0.0.0.0 -datacenter=test -retry-join consul1 -retry-interval 1s -node=consul4'

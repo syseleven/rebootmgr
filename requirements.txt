@@ -1,0 +1,7 @@
+click
+colorlog
+python-consul
+requests
+retrying
+holidays
+git+https://github.com/syseleven/consul_lib.git#egg=consul_lib
