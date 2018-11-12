@@ -35,6 +35,21 @@ def test_reboot_success_with_tasks(run_click, forward_port, consul1, consul_kv, 
     mocked_run.assert_any_call(["shutdown", "-r", "+1"], check=True)
 
 
+def test_reboot_fail(run_click, forward_port, consul1, consul_kv, reboot_task, mocked_run, mocker):
+    forward_port.consul(consul1)
+
+    mocked_sleep = mocker.patch("time.sleep")
+
+    mocked_run.side_effect = [Exception("Failed to run reboot command")]
+
+    result = run_click(rebootmgr, ["-v"], catch_exceptions=True)
+
+    assert result.exit_code == 1
+
+    mocked_sleep.assert_any_call(130)
+    mocked_run.assert_any_call(["shutdown", "-r", "+1"], check=True)
+
+
 def test_reboot_in_progress_other(run_click, forward_port, consul_kv, consul1):
     forward_port.consul(consul1)
 

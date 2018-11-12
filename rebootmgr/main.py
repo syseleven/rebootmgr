@@ -172,19 +172,8 @@ def is_node_disabled(con, hostname):
     return False
 
 
-@retry(wait_fixed=2000, stop_max_delay=20000)
-def set_boot_target(boottarget):
-    LOG.info("Set boot target to %s" % boottarget)
-    with open("/sys/class/dmi/id/product_uuid", "r") as f:
-        uuid = f.readline().strip()
-        url = "http://machinedb.sys11cloud.net/v1/machines/%s/boot/%s" % (uuid, boottarget)
-        req = requests.post(url, data="")
-        req.raise_for_status()
-
-
 @click.command()
 @click.option("-v", "--verbose", count=True, help="Once for INFO logging, twice for DEBUG")
-@click.option("-b", "--boot-target", help="Set the next boot target", type=click.Choice(['live', 'local', 'wipe']))
 @click.option("--check-triggers", help="Only reboot if a reboot is necessary", is_flag=True)
 @click.option("-n", "--dryrun", help="Run tasks and check services but don't reboot", is_flag=True)
 @click.option("-u", "--check-uptime", help="Make sure, that the uptime is less than 2 hours.", is_flag=True)
@@ -200,7 +189,7 @@ def set_boot_target(boottarget):
 @click.option("--consul-port", help="Port of Consul. Default env REBOOTMGR_CONSUL_PORT or 8500",
               default=os.environ.get("REBOOTMGR_CONSUL_PORT", 8500))
 @click.version_option()
-def cli(verbose, consul, consul_port, check_triggers, check_uptime, boot_target, dryrun, maintenance_reason, ignore_global_stop_flag,
+def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, maintenance_reason, ignore_global_stop_flag,
         ignore_node_disabled, check_holidays, lazy_consul_checks):
     """Reboot Manager
 
@@ -292,9 +281,6 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, boot_target,
             if check_stop_flag(con) and not ignore_global_stop_flag:
                 LOG.info("Global stop flag is set: exit")
                 sys.exit(EXIT_GLOBAL_STOP_FLAG_SET)
-
-            if boot_target:
-                set_boot_target(boot_target)
 
             if not dryrun:
                 LOG.debug("Write %s in key service/rebootmgr/reboot_in_progress" % hostname)
