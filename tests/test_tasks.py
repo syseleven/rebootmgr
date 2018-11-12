@@ -1,3 +1,4 @@
+import json
 import socket
 
 import pytest
@@ -14,9 +15,36 @@ def test_reboot_task_timeout(run_click, forward_port, consul1, consul_kv, reboot
 
     result = run_click(rebootmgr)
 
-    assert "Could not finish task 00_some_task.sh in 2 hours" in result.output
+    assert "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 2 hours" in result.output
     assert result.exit_code == 100
 
+    _, data = consul_kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
+    assert json.loads(data["Value"].decode()) == {
+        "enabled": False,
+        "message": "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 2 hours"
+    }
+
+
+
+
+def test_reboot_task_timeout_preexisting_config(run_click, forward_port, consul1, consul_kv, reboot_task, mocked_run, mocker):
+    forward_port.consul(consul1)
+
+    consul_kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"test_preserved": true}')
+    mocker.patch("time.sleep")
+    reboot_task("pre_boot", "00_some_task.sh", raise_timeout_expired=True)
+
+    result = run_click(rebootmgr)
+
+    assert "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 2 hours" in result.output
+    assert result.exit_code == 100
+
+    _, data = consul_kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
+    assert json.loads(data["Value"].decode()) == {
+        "test_preserved": True,
+        "enabled": False,
+        "message": "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 2 hours"
+    }
 
 
 @pytest.mark.xfail # TODO(sneubauer): Fix bug in rebootmgr
@@ -30,5 +58,13 @@ def test_post_reboot_phase_task_timeout(run_click, forward_port, consul_kv, cons
 
     result = run_click(rebootmgr)
 
-    assert "Could not finish task 50_another_task.sh in 2 hours" in result.output
+    assert "Could not finish task /etc/rebootmgr/pre_boot_tasks/50_another_task.sh in 2 hours" in result.output
     assert result.exit_code == 100
+
+    _, data = consul_kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
+    assert json.loads(data["Value"].decode()) == {
+        "enabled": False,
+        "message": "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 2 hours"
+    }
+
+
