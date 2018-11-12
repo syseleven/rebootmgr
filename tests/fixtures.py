@@ -1,4 +1,5 @@
 import os
+import time
 import signal
 import logging
 import subprocess
@@ -28,42 +29,79 @@ def consul4():
 
 
 @pytest.fixture
+def mocked_run(mocker):
+    return mocker.patch("subprocess.run")
+
+
+@pytest.fixture
 def run_click():
     from click.testing import CliRunner
-    def run(*args, **kwargs): 
+    def run(*args, catch_exceptions=False, **kwargs): 
         # See https://github.com/pallets/click/issues/1053
         logging.getLogger("").handlers = []
 
         runner = CliRunner(mix_stderr=True)
-        return runner.invoke(*args, catch_exceptions=False, **kwargs)
+        result = runner.invoke(*args, catch_exceptions=catch_exceptions, **kwargs)
+        print(result.output)
+        return result
     return run
 
 @pytest.fixture
 def consul_maint():
     f = _ConsulMaintFixture()
-    yield f
-    f.restore()
+    try:
+        yield f
+    finally:
+        f.restore()
 
 
 @pytest.fixture
 def consul_service():
     f = _ConsulServiceFixture()
-    yield f
-    f.restore()
+    try:
+        yield f
+    finally:
+        f.restore()
 
 
 @pytest.fixture
 def consul_kv(consul1):
-    f = _ConsulKVFixture(consul1)
-    yield f
-    f.restore()
+    try:
+        yield consul1.kv
+    finally:
+        consul1.kv.delete("", recurse=True)
+
+
+@pytest.fixture
+def reboot_task(mocker, mocked_run):
+    tasks = {"pre_boot": [], "post_boot": []}
+
+    def listdir(directory):
+        if directory == "/etc/rebootmgr/pre_boot_tasks/":
+            return tasks["pre_boot"]
+        elif directory == "/etc/rebootmgr/post_boot_tasks/":
+            return tasks["post_boot"]
+        else:
+           raise FileNotFoundError
+    mocker.patch("os.listdir", new=listdir)
+
+    def create_task(tasktype, filename, exit_code=0, raise_timeout_expired=False):
+        assert tasktype in ["pre_boot", "post_boot"], "task type must be either pre_boot or post_boot"
+
+        tasks[tasktype] += [filename]
+
+        mocked_run.side_effects += [exit_code != 0 and CalledProcessError() or raise_timeout_expired and TimeoutExpired()]
+
+    return create_task
 
 
 @pytest.fixture
 def forward_port():
     f = _PortForwardingFixture()
-    yield f
-    f.restore()
+    try:
+        yield f
+    finally:
+        f.restore()
 
 
 def _wait_for_leader(c):
@@ -84,26 +122,6 @@ class _ConsulServiceFixture:
     def restore(self):
         for consul_client, service_name in self.registered_services:
             consul_client.agent.service.deregister(service_name)
-
-
-class _ConsulKVFixture:
-    def __init__(self, con):
-        self._written = []
-        self._con = con
-
-    def get(self, *args, **kwargs):
-        self._con.kv.get(*args, **kwargs)
-
-    def put(self, key, *args, **kwargs):
-        self._con.kv.put(key, *args, **kwargs)
-        self._written += [key]
-
-    def delete(self, *args, **kwargs):
-        self._con.kv.delete(*args, **kwargs)
-
-    def restore(self):
-        for x in self._written:
-            self.delete(x)
 
 
 class _ConsulMaintFixture:
@@ -152,6 +170,8 @@ class _TCPPortForwarder():
              "tcp-listen:{},reuseaddr,fork".format(self.listen_port),
              "tcp:{}:{}".format(self.forward_host, self.forward_port)
         ])
+        # XXX(sneubauer): Dirty fix for race condition, where socat is not ready yet when test runs.
+        time.sleep(0.05)
 
     def stop(self):
         self.process.terminate()
