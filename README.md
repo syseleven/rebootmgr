@@ -20,7 +20,7 @@ If you want to try rebootmgr hands-on, have a look at our [installation guide](d
 
 ## Reference
 
-For a deep-dive into rebootmgr usage scenarios, have a lokok at our [reference guide](docs/reference.md)
+For a deep-dive into rebootmgr usage scenarios, have a look at our [reference guide](docs/reference.md)
 
 ## Testing
 
