@@ -2,7 +2,10 @@ import os
 import time
 import signal
 import logging
+import itertools
 import subprocess
+
+from unittest.mock import DEFAULT
 
 import pytest
 import consul
@@ -90,7 +93,16 @@ def reboot_task(mocker, mocked_run):
 
         tasks[tasktype] += [filename]
 
-        mocked_run.side_effects += [exit_code != 0 and CalledProcessError() or raise_timeout_expired and TimeoutExpired()]
+        exc = DEFAULT
+        if exit_code != 0:
+            exc = CalledProcessError(exit_code, filename)
+        elif raise_timeout_expired:
+            exc = subprocess.TimeoutExpired(filename, 1234)
+
+        if mocked_run.side_effect:
+            mocked_run.side_effect = itertools.chain(mocked_run.side_effect, [exc])
+        else:
+            mocked_run.side_effect = [exc]
 
     return create_task
 

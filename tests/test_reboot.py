@@ -1,6 +1,9 @@
 import socket
+import itertools
 
 import pytest
+
+from unittest.mock import DEFAULT
 
 from rebootmgr.main import cli as rebootmgr
 
@@ -21,6 +24,7 @@ def test_reboot_success_with_tasks(run_click, forward_port, consul1, consul_kv, 
     mocked_sleep = mocker.patch("time.sleep")
 
     reboot_task("pre_boot", "00_some_task.sh")
+    mocked_run.side_effect = itertools.chain(mocked_run.side_effect, [DEFAULT])
 
     result = run_click(rebootmgr, ["-v"])
 
