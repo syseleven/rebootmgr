@@ -7,7 +7,7 @@ from rebootmgr.main import cli as rebootmgr
 
 
 @pytest.mark.xfail # TODO(sneubauer): Fix bug in rebootmgr
-def test_reboot_task_timeout(run_cli, forward_port, consul_cluster, consul_kv, reboot_task, mocked_run, mocker):
+def test_reboot_task_timeout(run_cli, forward_port, consul_cluster, consul_kv, reboot_task, mocker):
     forward_port.consul(consul_cluster[0])
 
     mocker.patch("time.sleep")
@@ -27,7 +27,7 @@ def test_reboot_task_timeout(run_cli, forward_port, consul_cluster, consul_kv, r
 
 
 
-def test_reboot_task_timeout_preexisting_config(run_cli, forward_port, consul_cluster, consul_kv, reboot_task, mocked_run, mocker):
+def test_reboot_task_timeout_preexisting_config(run_cli, forward_port, consul_cluster, consul_kv, reboot_task, mocker):
     forward_port.consul(consul_cluster[0])
 
     consul_kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"test_preserved": true}')

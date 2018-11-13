@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import signal
 import logging
 import itertools
@@ -18,13 +19,38 @@ def consul_cluster():
 
 
 @pytest.fixture
-def mocked_run(mocker):
-    return mocker.patch("subprocess.run")
+def mock_subprocess_run(mocker):
+    side_effects = {}
+
+    def get_side_effect(command, *args, **kwargs):
+        if isinstance(command, str):
+            command = [command]
+        elif isinstance(command, list):
+            pass
+        else:
+            raise ValueError("command must be either string or list")
+
+        side_effect = side_effects[json.dumps(command)]
+        if isinstance(side_effect, Exception):
+            raise side_effect
+        if side_effect:
+            return side_effect
+        return DEFAULT
+
+    mocked_run = mocker.patch("subprocess.run")
+    mocked_run.side_effect = get_side_effect
+
+    def add(command, side_effect=None):
+        side_effects[json.dumps(command)] = side_effect
+        return mocked_run
+
+    return add
 
 
 @pytest.fixture
 def run_cli():
     from click.testing import CliRunner
+
     def run(*args, catch_exceptions=False, **kwargs): 
         # See https://github.com/pallets/click/issues/1053
         logging.getLogger("").handlers = []
@@ -33,6 +59,7 @@ def run_cli():
         result = runner.invoke(*args, catch_exceptions=catch_exceptions, **kwargs)
         print(result.output)
         return result
+
     return run
 
 @pytest.fixture
@@ -62,7 +89,7 @@ def consul_kv(consul_cluster):
 
 
 @pytest.fixture
-def reboot_task(mocker, mocked_run):
+def reboot_task(mocker, mock_subprocess_run):
     tasks = {"pre_boot": [], "post_boot": []}
 
     def listdir(directory):
@@ -79,16 +106,15 @@ def reboot_task(mocker, mocked_run):
 
         tasks[tasktype] += [filename]
 
-        exc = DEFAULT
+        side_effect = None
         if exit_code != 0:
-            exc = CalledProcessError(exit_code, filename)
+            side_effect = CalledProcessError(exit_code, filename)
         elif raise_timeout_expired:
-            exc = subprocess.TimeoutExpired(filename, 1234)
+            side_effect = subprocess.TimeoutExpired(filename, 1234)
 
-        if mocked_run.side_effect:
-            mocked_run.side_effect = itertools.chain(mocked_run.side_effect, [exc])
-        else:
-            mocked_run.side_effect = [exc]
+        mock_subprocess_run(
+            ["/etc/rebootmgr/{}_tasks/{}".format(tasktype, filename)],
+            side_effect)
 
     return create_task
 
