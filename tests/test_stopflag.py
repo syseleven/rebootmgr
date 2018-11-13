@@ -3,7 +3,7 @@ import pytest
 from rebootmgr.main import cli as rebootmgr
 
 
-def test_stopflag(run_cli, forward_port, consul_cluster):
+def test_not_verbose(run_cli, forward_port, consul_cluster):
     forward_port.consul(consul_cluster[0])
     consul_cluster[0].kv.put("service/rebootmgr/stop", "reason: stopped for testing")
 
