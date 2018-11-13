@@ -86,6 +86,8 @@ def reboot_task(mocker, mock_subprocess_run):
     tasks = {"pre_boot": [], "post_boot": []}
 
     def listdir(directory):
+        # TODO: Make task directories configurable to avoid mocking them in tests.
+        # Hence, we would be able to use Pytest's tmpdir fixture.
         if directory == "/etc/rebootmgr/pre_boot_tasks/":
             return tasks["pre_boot"]
         elif directory == "/etc/rebootmgr/post_boot_tasks/":
