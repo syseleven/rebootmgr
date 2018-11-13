@@ -3,8 +3,7 @@ import pytest
 from rebootmgr.main import cli as rebootmgr
 
 
-def test_not_verbose(run_cli, forward_port, consul_cluster):
-    forward_port.consul(consul_cluster[0])
+def test_not_verbose(run_cli, forward_consul_port, consul_cluster):
     consul_cluster[0].kv.put("service/rebootmgr/stop", "reason: stopped for testing")
 
     result = run_cli(rebootmgr)
@@ -16,8 +15,7 @@ def test_not_verbose(run_cli, forward_port, consul_cluster):
     assert not result.output
 
 
-def test_verbose(run_cli, forward_port, consul_cluster):
-    forward_port.consul(consul_cluster[0])
+def test_verbose(run_cli, forward_consul_port, consul_cluster):
     consul_cluster[0].kv.put("service/rebootmgr/stop", "reason: stopped for testing")
 
     result1 = run_cli(rebootmgr, ["-v"])

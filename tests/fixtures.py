@@ -127,6 +127,11 @@ def reboot_task(mocker, mock_subprocess_run):
 
 
 @pytest.fixture
+def forward_consul_port(forward_port, consul_cluster):
+    forward_port.consul(consul_cluster[0])
+
+
+@pytest.fixture
 def forward_port():
     """
     Forwards tcp ports.
