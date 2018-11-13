@@ -37,7 +37,7 @@ def mocked_run(mocker):
 
 
 @pytest.fixture
-def run_click():
+def run_cli():
     from click.testing import CliRunner
     def run(*args, catch_exceptions=False, **kwargs): 
         # See https://github.com/pallets/click/issues/1053
