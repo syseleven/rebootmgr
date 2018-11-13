@@ -16,7 +16,7 @@ def test_reboot_fails_without_tasks(run_cli, forward_port, consul_cluster):
     assert isinstance(result.exception, FileNotFoundError)
 
 
-def test_reboot_success_with_tasks(run_cli, forward_port, consul_cluster, consul_kv, reboot_task, mock_subprocess_run, mocker):
+def test_reboot_success_with_tasks(run_cli, forward_port, consul_cluster, reboot_task, mock_subprocess_run, mocker):
     forward_port.consul(consul_cluster[0])
 
     # mocks
@@ -33,7 +33,7 @@ def test_reboot_success_with_tasks(run_cli, forward_port, consul_cluster, consul
     mocked_run.assert_any_call(["shutdown", "-r", "+1"], check=True)
 
 
-def test_reboot_fail(run_cli, forward_port, consul_cluster, consul_kv, reboot_task, mock_subprocess_run, mocker):
+def test_reboot_fail(run_cli, forward_port, consul_cluster, reboot_task, mock_subprocess_run, mocker):
     forward_port.consul(consul_cluster[0])
 
     mocked_sleep = mocker.patch("time.sleep")
@@ -50,10 +50,10 @@ def test_reboot_fail(run_cli, forward_port, consul_cluster, consul_kv, reboot_ta
     mocked_run.assert_any_call(["shutdown", "-r", "+1"], check=True)
 
 
-def test_reboot_in_progress_other(run_cli, forward_port, consul_kv, consul_cluster):
+def test_reboot_in_progress_other(run_cli, forward_port, consul_cluster):
     forward_port.consul(consul_cluster[0])
 
-    consul_kv.put("service/rebootmgr/reboot_in_progress", "some_hostname")
+    consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", "some_hostname")
 
     result = run_cli(rebootmgr, ["-v"])
 
@@ -61,10 +61,10 @@ def test_reboot_in_progress_other(run_cli, forward_port, consul_kv, consul_clust
     assert result.exit_code == 4
 
 
-def test_post_reboot_phase_fails_without_tasks(run_cli, forward_port, consul_kv, consul_cluster):
+def test_post_reboot_phase_fails_without_tasks(run_cli, forward_port, consul_cluster):
     forward_port.consul(consul_cluster[0])
 
-    consul_kv.put("service/rebootmgr/reboot_in_progress", socket.gethostname())
+    consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", socket.gethostname())
 
     result = run_cli(rebootmgr, ["-v"], catch_exceptions=True)
 
@@ -73,12 +73,12 @@ def test_post_reboot_phase_fails_without_tasks(run_cli, forward_port, consul_kv,
     assert isinstance(result.exception, FileNotFoundError)
 
 
-def test_post_reboot_phase_success_with_tasks(run_cli, forward_port, consul_kv, consul_cluster, reboot_task):
+def test_post_reboot_phase_success_with_tasks(run_cli, forward_port, consul_cluster, reboot_task):
     forward_port.consul(consul_cluster[0])
 
     reboot_task("post_boot", "50_another_task.sh")
 
-    consul_kv.put("service/rebootmgr/reboot_in_progress", socket.gethostname())
+    consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", socket.gethostname())
 
     result = run_cli(rebootmgr, ["-v"])
 

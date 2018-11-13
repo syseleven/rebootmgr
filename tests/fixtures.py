@@ -3,10 +3,12 @@ import time
 import json
 import signal
 import logging
+import requests
 import itertools
 import subprocess
 
 from unittest.mock import DEFAULT
+from urllib.parse import urljoin
 
 import pytest
 import consul
@@ -15,7 +17,15 @@ import consul
 @pytest.fixture
 def consul_cluster():
     consul1 = _wait_for_leader(consul.Consul(host="consul1"))
-    return [consul1, consul.Consul(host="consul2"), consul.Consul(host="consul3"), consul.Consul(host="consul4")]
+    base_url = 'http://{host}:{port}/'.format(
+        host=consul1.http.host, port=consul1.http.port)
+    snapshot_url = urljoin(base_url, '/v1/snapshot')
+    snapshot = requests.get(snapshot_url).content
+
+    try:
+        yield [consul1, consul.Consul(host="consul2"), consul.Consul(host="consul3"), consul.Consul(host="consul4")]
+    finally:
+        requests.put(snapshot_url, data=snapshot)
 
 
 @pytest.fixture
@@ -72,23 +82,6 @@ def consul_maint():
 
 
 @pytest.fixture
-def consul_service():
-    f = _ConsulServiceFixture()
-    try:
-        yield f
-    finally:
-        f.restore()
-
-
-@pytest.fixture
-def consul_kv(consul_cluster):
-    try:
-        yield consul_cluster[0].kv
-    finally:
-        consul_cluster[0].kv.delete("", recurse=True)
-
-
-@pytest.fixture
 def reboot_task(mocker, mock_subprocess_run):
     tasks = {"pre_boot": [], "post_boot": []}
 
@@ -142,35 +135,6 @@ def _wait_for_leader(c):
     while not c.status.leader():
         time.sleep(.1)
     return c
-
-
-class _ConsulServiceFixture:
-    def __init__(self):
-        self.registered_services = []
-
-    def register(self, consul_client, name, *args, service_id=None, **kwargs):
-        consul_client.agent.service.register(name, *args, **kwargs)
-        self.registered_services += [(consul_client, service_id or name)]
-
-    def restore(self):
-        for consul_client, service_name in self.registered_services:
-            consul_client.agent.service.deregister(service_name)
-
-
-class _ConsulMaintFixture:
-    def __init__(self):
-        self._enabled = []
-
-    def enable(self, consul_client, reason=None):
-        consul_client.agent.maintenance(True, reason)
-        self._enabled += [consul_client]
-
-    def disable(self, consul_client):
-        consul_client.agent.maintenance(False)
-
-    def restore(self):
-        for client in self._enabled:
-            self.disable(client)
 
 
 class _PortForwardingFixture:
