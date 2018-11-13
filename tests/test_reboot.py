@@ -29,8 +29,11 @@ def test_reboot_success_with_tasks(run_cli, forward_port, consul_cluster, reboot
     assert "00_some_task.sh" in result.output
     assert result.exit_code == 0
 
-    mocked_sleep.assert_any_call(130)
     mocked_run.assert_any_call(["shutdown", "-r", "+1"], check=True)
+
+    # We want rebootmgr to sleep for 2 minutes after running the pre boot tasks,
+    # so that we can notice when the tasks broke some consul checks.
+    mocked_sleep.assert_any_call(130)
 
 
 def test_reboot_fail(run_cli, forward_port, consul_cluster, reboot_task, mock_subprocess_run, mocker):
@@ -46,8 +49,11 @@ def test_reboot_fail(run_cli, forward_port, consul_cluster, reboot_task, mock_su
 
     assert result.exit_code == 1
 
-    mocked_sleep.assert_any_call(130)
     mocked_run.assert_any_call(["shutdown", "-r", "+1"], check=True)
+
+    # We want rebootmgr to sleep for 2 minutes after running the pre boot tasks,
+    # so that we can notice when the tasks broke some consul checks.
+    mocked_sleep.assert_any_call(130)
 
 
 def test_reboot_in_progress_other(run_cli, forward_port, consul_cluster):
