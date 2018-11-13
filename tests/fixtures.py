@@ -20,12 +20,17 @@ def consul_cluster():
     base_url = 'http://{host}:{port}/'.format(
         host=consul1.http.host, port=consul1.http.port)
     snapshot_url = urljoin(base_url, '/v1/snapshot')
-    snapshot = requests.get(snapshot_url).content
+    snapshot = requests.get(snapshot_url)
+    snapshot.raise_for_status()
 
     try:
-        yield [consul1, consul.Consul(host="consul2"), consul.Consul(host="consul3"), consul.Consul(host="consul4")]
+        clients = [consul1, consul.Consul(host="consul2"), consul.Consul(host="consul3"), consul.Consul(host="consul4")]
+        yield clients
     finally:
-        requests.put(snapshot_url, data=snapshot)
+        resp = requests.put(snapshot_url, data=snapshot.content)
+        resp.raise_for_status()
+        for c in clients:
+            c.agent.maintenance(False)
 
 
 @pytest.fixture
@@ -71,14 +76,6 @@ def run_cli():
         return result
 
     return run
-
-@pytest.fixture
-def consul_maint():
-    f = _ConsulMaintFixture()
-    try:
-        yield f
-    finally:
-        f.restore()
 
 
 @pytest.fixture
