@@ -27,7 +27,7 @@ def test_reboot_success_whitelisted_checks(run_cli, forward_port, consul_cluster
     assert result.exit_code == 0
 
 
-def test_reboot_fail_checks(run_cli, forward_port, consul_cluster, boot_task, mock_subprocess_run, mocker):
+def test_reboot_fail_checks(run_cli, forward_port, consul_cluster, reboot_task, mock_subprocess_run, mocker):
     consul_cluster[0].agent.service.register("A", tags=["rebootmgr"])
     consul_cluster[1].agent.service.register("A", tags=["rebootmgr"], check=Check.ttl("1ms")) # Failing
     time.sleep(0.01)
