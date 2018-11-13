@@ -24,7 +24,21 @@ For a deep-dive into rebootmgr usage scenarios, have a lokok at our [reference g
 
 ## Testing
 
-How to run the tests and linters? TBD
+For running the integration tests you need docker compose. For running the linter and safety checks, you need tox.
+
+```
+# Run integration tests with different python versions
+$ docker-compose run --rm integration_tests_py37
+$ docker-compose run --rm integration_tests_py36
+$ docker-compose run --rm integration_tests_py35
+
+# Run linter and safety checks
+$ tox -e lint
+$ tox -e safety
+
+# Clean up docker
+docker-compose down --rmi local -v
+```
 
 ## Contributing
 
