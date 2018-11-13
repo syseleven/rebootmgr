@@ -109,6 +109,15 @@ def reboot_task(mocker, mocked_run):
 
 @pytest.fixture
 def forward_port():
+    """
+    Forwards tcp ports.
+
+    We need this, because rebootmgr assumes that consul is reachable on localhost:8500.
+
+    This example will forward `127.0.0.1:8500` to `10.0.0.1:8500`
+
+        forward_port.tcp("10.0.0.1", 8500)
+    """
     f = _PortForwardingFixture()
     try:
         yield f
@@ -153,6 +162,9 @@ class _ConsulMaintFixture:
 
 
 class _PortForwardingFixture:
+    ```
+    See the `forward_port` fixture for an explanation and an example.
+    ```
     def __init__(self):
         self.forwarders = []
 
@@ -170,6 +182,13 @@ class _PortForwardingFixture:
 
 
 class _TCPPortForwarder():
+    """
+    Forward TCP port using socat under the hood.
+
+    See the `forward_port` fixture for an explanation and an example.
+
+    This is known to be a hack; usinfg socat was the simplest and most reliable solution I found.
+    """
     def __init__(self, listen_port, forward_host, forward_port):
         self.listen_port = listen_port
         self.forward_host = forward_host
