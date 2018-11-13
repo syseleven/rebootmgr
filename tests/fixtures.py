@@ -8,7 +8,6 @@ import itertools
 import subprocess
 
 from unittest.mock import DEFAULT
-from urllib.parse import urljoin
 
 import pytest
 import consul
@@ -16,15 +15,16 @@ import consul
 
 @pytest.fixture
 def consul_cluster():
-    consul1 = _wait_for_leader(consul.Consul(host="consul1"))
-    base_url = 'http://{host}:{port}/'.format(
-        host=consul1.http.host, port=consul1.http.port)
-    snapshot_url = urljoin(base_url, '/v1/snapshot')
+    clients = [consul.Consul(host="consul{}".format(i + 1)) for i in range(4)]
+
+    while not clients[0].status.leader():
+        time.sleep(.1)
+
+    snapshot_url = 'http://consul1:8500/v1/snapshot'
     snapshot = requests.get(snapshot_url)
     snapshot.raise_for_status()
 
     try:
-        clients = [consul1, consul.Consul(host="consul2"), consul.Consul(host="consul3"), consul.Consul(host="consul4")]
         yield clients
     finally:
         resp = requests.put(snapshot_url, data=snapshot.content)
@@ -147,13 +147,6 @@ def forward_port():
         yield f
     finally:
         f.restore()
-
-
-def _wait_for_leader(c):
-    import time
-    while not c.status.leader():
-        time.sleep(.1)
-    return c
 
 
 class _PortForwardingFixture:
