@@ -12,23 +12,9 @@ import consul
 
 
 @pytest.fixture
-def consul1():
-    return _wait_for_leader(consul.Consul(host="consul1"))
-
-
-@pytest.fixture
-def consul2():
-    return _wait_for_leader(consul.Consul(host="consul2"))
-
-
-@pytest.fixture
-def consul3():
-    return _wait_for_leader(consul.Consul(host="consul3"))
-
-
-@pytest.fixture
-def consul4():
-    return _wait_for_leader(consul.Consul(host="consul4"))
+def consul_cluster():
+    consul1 = _wait_for_leader(consul.Consul(host="consul1"))
+    return [consul1, consul.Consul(host="consul2"), consul.Consul(host="consul3"), consul.Consul(host="consul4")]
 
 
 @pytest.fixture
@@ -68,11 +54,11 @@ def consul_service():
 
 
 @pytest.fixture
-def consul_kv(consul1):
+def consul_kv(consul_cluster):
     try:
-        yield consul1.kv
+        yield consul_cluster[0].kv
     finally:
-        consul1.kv.delete("", recurse=True)
+        consul_cluster[0].kv.delete("", recurse=True)
 
 
 @pytest.fixture
@@ -162,9 +148,9 @@ class _ConsulMaintFixture:
 
 
 class _PortForwardingFixture:
-    ```
+    """
     See the `forward_port` fixture for an explanation and an example.
-    ```
+    """
     def __init__(self):
         self.forwarders = []
 

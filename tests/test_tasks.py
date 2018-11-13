@@ -7,8 +7,8 @@ from rebootmgr.main import cli as rebootmgr
 
 
 @pytest.mark.xfail # TODO(sneubauer): Fix bug in rebootmgr
-def test_reboot_task_timeout(run_cli, forward_port, consul1, consul_kv, reboot_task, mocked_run, mocker):
-    forward_port.consul(consul1)
+def test_reboot_task_timeout(run_cli, forward_port, consul_cluster, consul_kv, reboot_task, mocked_run, mocker):
+    forward_port.consul(consul_cluster[0])
 
     mocker.patch("time.sleep")
     reboot_task("pre_boot", "00_some_task.sh", raise_timeout_expired=True)
@@ -27,8 +27,8 @@ def test_reboot_task_timeout(run_cli, forward_port, consul1, consul_kv, reboot_t
 
 
 
-def test_reboot_task_timeout_preexisting_config(run_cli, forward_port, consul1, consul_kv, reboot_task, mocked_run, mocker):
-    forward_port.consul(consul1)
+def test_reboot_task_timeout_preexisting_config(run_cli, forward_port, consul_cluster, consul_kv, reboot_task, mocked_run, mocker):
+    forward_port.consul(consul_cluster[0])
 
     consul_kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"test_preserved": true}')
     mocker.patch("time.sleep")
@@ -48,8 +48,8 @@ def test_reboot_task_timeout_preexisting_config(run_cli, forward_port, consul1, 
 
 
 @pytest.mark.xfail # TODO(sneubauer): Fix bug in rebootmgr
-def test_post_reboot_phase_task_timeout(run_cli, forward_port, consul_kv, consul1, reboot_task):
-    forward_port.consul(consul1)
+def test_post_reboot_phase_task_timeout(run_cli, forward_port, consul_kv, consul_cluster, reboot_task):
+    forward_port.consul(consul_cluster[0])
 
     reboot_task("post_boot", "50_another_task.sh", raise_timeout_expired=True)
 
