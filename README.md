@@ -6,7 +6,7 @@ Rebootmgr is an operations tool, that can help you safely automate reboots of no
 
 We created rebootmgr for our public cloud offering SysEleven Stack, because we wanted to make sure that our services are always up-to-date and secure.
 
-We noticed that rebootmgr does not only save valuable time for our engineers, it can also reboot more reliably, because it is more vigilant than a human, always keeping an eye on the cluster's health via consul.
+We noticed that rebootmgr does not only save valuable time for our engineers, it can also reboot more reliably, because it is more vigilant than a human, always keeping an eye on the cluster's health.
 
 ## Design
 
@@ -20,7 +20,7 @@ If you want to try rebootmgr hands-on, have a look at our [installation guide](d
 
 ## Reference
 
-For a deep-dive into rebootmgr usage scenarios, have a lokok at our [reference guide](docs/reference.md)
+For a deep-dive into rebootmgr usage scenarios, have a look at our [reference guide](docs/reference.md)
 
 ## Testing
 

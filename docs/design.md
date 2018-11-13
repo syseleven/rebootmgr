@@ -30,7 +30,7 @@ We already register important services to the consul service discovery. We can r
 
 ## Reboot events
 
-The rebootmgr should reboot a node when
+The rebootmgr should reboot a node when either of the following is true
 - the file `/var/run/reboot_required` exists
 - the consul key `/service/rebootmgr/<node>/reboot_required` exists
 - an operator runs `rebootmgr` on the commandline
