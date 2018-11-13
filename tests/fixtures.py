@@ -35,6 +35,21 @@ def consul_cluster():
 
 @pytest.fixture
 def mock_subprocess_run(mocker):
+    """
+    Fixture for testing `subprocess.run`. Returns and configures a `MagicMock` instance.
+
+    You can optionally pass a `side_effect` as a second argument.
+
+    `side_effect` can be an Exception and will then be raised; see the `MagicMock.side_effect` documentation for more information.
+
+    Example:
+
+        mocked_run = mock_subprocess_run(["reboot"])
+
+        call_your_tested_code()
+
+        mocked_run.assert_any_call(["reboot"])
+    """
     side_effects = {}
 
     def get_side_effect(command, *args, **kwargs):
