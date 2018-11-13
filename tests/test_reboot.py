@@ -1,7 +1,4 @@
 import socket
-import itertools
-
-import pytest
 
 from rebootmgr.main import cli as rebootmgr
 

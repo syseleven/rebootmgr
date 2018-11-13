@@ -1,5 +1,3 @@
-import pytest
-
 from rebootmgr.main import cli as rebootmgr
 
 

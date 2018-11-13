@@ -5,7 +5,6 @@ import socket
 import sys
 import json
 import subprocess
-import requests
 import time
 import colorlog
 import holidays
@@ -33,22 +32,24 @@ EXIT_NODE_DISABLED = 101
 EXIT_GLOBAL_STOP_FLAG_SET = 102
 EXIT_DID_NOT_REALLY_REBOOT = 103
 
+
 def logsetup(verbosity):
-    LOGLEVEL = logging.WARNING
+    level = logging.WARNING
 
     if verbosity > 0:
-        LOGLEVEL = logging.INFO
+        level = logging.INFO
     if verbosity > 1:
-        LOGLEVEL = logging.DEBUG
+        level = logging.DEBUG
 
     stderr_formatter = colorlog.ColoredFormatter("%(log_color)s%(name)s [%(levelname)s] %(message)s")
     stderr_handler = logging.StreamHandler()
     stderr_handler.setFormatter(stderr_formatter)
 
-    logging.basicConfig(handlers=[stderr_handler], level=LOGLEVEL)
+    logging.basicConfig(handlers=[stderr_handler], level=level)
 
     LOG.info("Verbose logging enabled")
     LOG.debug("Debug logging enabled")
+
 
 def run_tasks(tasktype, con, hostname):
     """
@@ -61,7 +62,7 @@ def run_tasks(tasktype, con, hostname):
         task = os.path.join("/etc/rebootmgr/%s_tasks" % tasktype, task)
         LOG.info("Run task %s" % task)
         try:
-             subprocess.run(task, check=True, timeout=(2 * 60 * 60))
+            subprocess.run(task, check=True, timeout=(2 * 60 * 60))
         except subprocess.TimeoutExpired:
             LOG.error("Could not finish task %s in 2 hours. Exit" % task)
             LOG.error("Disable rebootmgr in consul for this node")
@@ -93,7 +94,7 @@ def check_consul_services(con):
     whitelist = get_whitelist(con)
 
     if whitelist:
-        LOG.warning("Checks from the following hosts will be ignored, " + \
+        LOG.warning("Checks from the following hosts will be ignored, " +
                     "because service/rebootmgr/ignore_failed_checks is set: {}".format(", ".join(whitelist)))
 
     local_checks = get_local_checks(con, tags=["rebootmgr"])
@@ -154,7 +155,7 @@ def uptime():
 def check_consul_cluster(con):
     whitelist = get_whitelist(con)
     if whitelist:
-        LOG.warning("Status of the following hosts will be ignored, " + \
+        LOG.warning("Status of the following hosts will be ignored, " +
                     "because service/rebootmgr/ignore_failed_checks is set: {}".format(", ".join(whitelist)))
     for member in con.agent.members():
         if "Status" in member.keys() and member["Status"] != 1 and member["Name"] not in whitelist:
@@ -178,11 +179,11 @@ def is_node_disabled(con, hostname):
 @click.option("-n", "--dryrun", help="Run tasks and check services but don't reboot", is_flag=True)
 @click.option("-u", "--check-uptime", help="Make sure, that the uptime is less than 2 hours.", is_flag=True)
 @click.option("-s", "--ignore-global-stop-flag", help="ignore the global stop flag (service/rebootmgr/stop).", is_flag=True)
-@click.option( "--check-holidays", help="Don't reboot on holidays", is_flag=True)
-@click.option( "--lazy-consul-checks", help="Don't repeat consul checks after two minutes", is_flag=True)
+@click.option("--check-holidays", help="Don't reboot on holidays", is_flag=True)
+@click.option("--lazy-consul-checks", help="Don't repeat consul checks after two minutes", is_flag=True)
 @click.option("-l", "--ignore-node-disabled", help="ignore the node specific stop flag (service/rebootmgr/hostname/config)", is_flag=True)
-@click.option("--maintenance-reason", help="""Reason for the downtime in consul. If the text starts with "reboot", """ + 
-              "a 15 minute maintenance period is scheduled in zabbix\nDefault: reboot by rebootmgr", 
+@click.option("--maintenance-reason", help="""Reason for the downtime in consul. If the text starts with "reboot", """ +
+              "a 15 minute maintenance period is scheduled in zabbix\nDefault: reboot by rebootmgr",
               default="reboot by rebootmgr")
 @click.option("--consul", help="Address of Consul. Default env REBOOTMGR_CONSUL_ADDR or 127.0.0.1.",
               default=os.environ.get("REBOOTMGR_CONSUL_ADDR", "127.0.0.1"))
@@ -303,6 +304,7 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
                     LOG.error("Remove consul key service/rebootmgr/reboot_in_progress")
                     con.kv.delete("service/rebootmgr/reboot_in_progress")
                     raise e
+
 
 if __name__ == "__main__":
     cli()

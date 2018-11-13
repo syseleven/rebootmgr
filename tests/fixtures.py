@@ -1,10 +1,7 @@
-import os
 import time
 import json
-import signal
 import logging
 import requests
-import itertools
 import subprocess
 
 from unittest.mock import DEFAULT
@@ -81,7 +78,7 @@ def mock_subprocess_run(mocker):
 def run_cli():
     from click.testing import CliRunner
 
-    def run(*args, catch_exceptions=False, **kwargs): 
+    def run(*args, catch_exceptions=False, **kwargs):
         # See https://github.com/pallets/click/issues/1053
         logging.getLogger("").handlers = []
 
@@ -105,7 +102,7 @@ def reboot_task(mocker, mock_subprocess_run):
         elif directory == "/etc/rebootmgr/post_boot_tasks/":
             return tasks["post_boot"]
         else:
-           raise FileNotFoundError
+            raise FileNotFoundError
     mocker.patch("os.listdir", new=listdir)
 
     def create_task(tasktype, filename, exit_code=0, raise_timeout_expired=False):
@@ -115,7 +112,7 @@ def reboot_task(mocker, mock_subprocess_run):
 
         side_effect = None
         if exit_code != 0:
-            side_effect = CalledProcessError(exit_code, filename)
+            side_effect = subprocess.CalledProcessError(exit_code, filename)
         elif raise_timeout_expired:
             side_effect = subprocess.TimeoutExpired(filename, 1234)
 
