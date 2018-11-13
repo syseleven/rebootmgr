@@ -11,12 +11,13 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        "click",
-        "colorlog",
-        "python-consul",
-        "requests",
-        "retrying",
-        "holidays",
+        "click>=6.0",
+        "colorlog>=3.1",
+        "python-consul>=1.1",
+        "requests>=2.20",
+        "retrying>=1.3",
+        "holidays>=0.9",
+        # TODO(sneubauer): Pin consul_lib once it is released on pypi
         "consul_lib",
     ],
     entry_points="""
