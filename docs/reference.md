@@ -93,10 +93,10 @@ If a task exits with any other code than `0`, reboot manager will fail and not r
 
 Reboot manager will reboot when one of the following is true:
 
-- The option --ignore-triggers has been specified
+- It has been invoked without the option `--check-triggers`
 - The consul key `service/rebootmgr/nodes/{hostname}/reboot_required` is set
 - The file `/var/run/reboot-required` exists
 
 ## Holidays
 
-If the option --check-holidays is specified, reboot manager will refuse to reboot on german holidays.
+If the option `--check-holidays` is specified, reboot manager will refuse to reboot on german holidays.
