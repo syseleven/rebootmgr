@@ -56,7 +56,7 @@ def test_reboot_fail(run_cli, forward_port, consul_cluster, reboot_task, mock_su
     mocked_sleep.assert_any_call(130)
 
 
-def test_reboot_in_progress_other(run_cli, forward_port, consul_cluster):
+def test_reboot_fails_if_another_reboot_is_in_progress(run_cli, forward_port, consul_cluster):
     forward_port.consul(consul_cluster[0])
 
     consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", "some_hostname")
