@@ -2,7 +2,7 @@
 Description=Rebootmgr
 After=network-online.target consul.service
 
-Documentation=https://intra.syseleven.de/confluence/pages/viewpage.action?spaceKey=CLOUD&title=Design+Document%3A+Unattended+Reboots
+Documentation=https://github.com/syseleven/rebootmgr/blob/master/docs/design.md
 
 [Service]
 Type=oneshot
