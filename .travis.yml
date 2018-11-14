@@ -1,0 +1,17 @@
+language: python
+python:
+  - "3.6"
+install:
+  - pip install tox docker-compose
+sudo: required
+services:
+  - docker
+script:
+  - $CMD
+matrix:
+  include:
+    - env: CMD="docker-compose run --rm integration_tests_py35"
+    - env: CMD="docker-compose run --rm integration_tests_py36"
+    - env: CMD="docker-compose run --rm integration_tests_py37"
+    - env: CMD="tox -e lint"
+    - env: CMD="tox -e safety"
