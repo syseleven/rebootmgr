@@ -1,0 +1,10 @@
+#!/usr/bin/make -f
+
+export PBR_VERSION=0.0.1
+
+%:
+	dh $@ --with python3,systemd --buildsystem=pybuild
+
+override_dh_systemd_start:
+	echo "don't run dh_systemd_start"
+

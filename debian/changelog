@@ -1,0 +1,105 @@
+rebootmgr (0.0.20-0+syseleven1) xenial; urgency=medium
+
+  * Don't restart rebootmgr after update/installation
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Wed,22 Aug 2018 15:03:37 +0200
+rebootmgr (0.0.19-0+syseleven1) xenial; urgency=medium
+
+  * Change default cli options
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Fri,17 Aug 2018 15:03:37 +0200
+rebootmgr (0.0.18-0+syseleven1) xenial; urgency=medium
+
+  * Remove systemd timer from package
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Fri,27 Jul 2018 15:03:37 +0200
+rebootmgr (0.0.17-0+syseleven1) xenial; urgency=medium
+
+  * Version update
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Fri,29 Jun 2018 15:03:37 +0200
+rebootmgr (0.0.16-0+syseleven1) xenial; urgency=medium
+
+  * Version update
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Wed,11 Sep 2018 15:03:37 +0200
+rebootmgr (0.0.15-0+syseleven1) xenial; urgency=medium
+
+  * Version update
+
+ -- Steffen Neubauer <s.neubauer@syseleven.de>  Wed,04 Sep 2017 15:03:37 +0200
+rebootmgr (0.0.14-0+syseleven1) xenial; urgency=medium
+
+  * Version update
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Wed,16 Aug 2017 15:03:37 +0200
+rebootmgr (0.0.13-0+syseleven1) xenial; urgency=medium
+
+  * Version update
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Mon,17 Jul 2017 15:03:37 +0200
+rebootmgr (0.0.12-0+syseleven1) xenial; urgency=medium
+
+  * Version update
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Tue,4 Jul 2017 15:03:37 +0200
+rebootmgr (0.0.11-0+syseleven1) xenial; urgency=medium
+
+  * Version update
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Thu,3 Jul 2017 15:03:37 +0200
+rebootmgr (0.0.10-0+syseleven1) xenial; urgency=medium
+
+  * Version update
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Thu, 20 Apr 2017 15:03:37 +0200
+rebootmgr (0.0.9-0+syseleven1) xenial; urgency=medium
+
+  * Version update
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Thu, 20 Apr 2017 15:03:37 +0200
+rebootmgr (0.0.8-0+syseleven1) xenial; urgency=medium
+
+  * Version update
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Thu, 20 Apr 2017 15:03:37 +0200
+rebootmgr (0.0.7-0+syseleven1) xenial; urgency=medium
+
+  * Version update
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Wed, 22 Mar 2017 15:03:37 +0200
+rebootmgr (0.0.6-0+syseleven2) xenial; urgency=medium
+
+  * use symlink for etc/kernel/postinst.d/update-notifier
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Wed, 22 Mar 2017 15:03:37 +0200
+rebootmgr (0.0.6-0+syseleven1) xenial; urgency=medium
+
+  * Version update to 0.0.6
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Wed, 22 Mar 2017 15:03:37 +0200
+rebootmgr (0.0.5-0+syseleven1) xenial; urgency=medium
+
+  * Version update to 0.0.5
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Fri, 17 Mar 2017 15:03:37 +0200
+rebootmgr (0.0.4-0+syseleven1) xenial; urgency=medium
+
+  * Version update to 0.0.4
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Thu, 09 Mar 2017 15:03:37 +0200
+rebootmgr (0.0.3-0+syseleven1) xenial; urgency=medium
+
+  * Version update
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Thu, 09 Mar 2017 15:03:37 +0200
+rebootmgr (0.0.2-0+syseleven1) xenial; urgency=medium
+
+  * fix pybuild install
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Thu, 09 Mar 2017 15:03:37 +0200
+rebootmgr (0.0.1-0+syseleven1) xenial; urgency=medium
+
+  * Initial build of this package for Ubuntu 16.04
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Thu, 09 Mar 2017 15:03:37 +0200

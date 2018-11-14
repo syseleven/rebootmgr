@@ -1,0 +1,12 @@
+[Unit]
+Description=Rebootmgr
+After=network-online.target consul.service
+
+Documentation=https://github.com/syseleven/rebootmgr/blob/master/docs/design.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/rebootmgr -v --check-holidays --check-uptime --check-triggers
+# see rebootmgr/rebootmgr/main.py for a list of error codes
+SuccessExitStatus=0 3 4 101 102
+

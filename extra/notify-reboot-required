@@ -1,0 +1,11 @@
+#!/bin/bash
+#
+# This script is called by some packages (kernel, systemd, libc6) from the postinstall script
+# This is a simplified version from the update-notifier-common package
+
+if [ "$0" = "/etc/kernel/postinst.d/update-notifier" ]; then
+    DPKG_MAINTSCRIPT_PACKAGE=linux-base
+fi
+
+touch /var/run/reboot-required
+echo "$DPKG_MAINTSCRIPT_PACKAGE" >> /var/run/reboot-required.pkgs
