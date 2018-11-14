@@ -1,6 +1,6 @@
 # Unattended Reboot Manager
 
-[![Build Status](https://travis-ci.org/syseleven/consul_lib.svg?branch=master)](https://travis-ci.org/syseleven/consul_lib)
+[![Build Status](https://travis-ci.org/syseleven/rebootmgr.svg?branch=master)](https://travis-ci.org/syseleven/rebootmgr)
 
 ## Overview
 
