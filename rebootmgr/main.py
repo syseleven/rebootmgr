@@ -51,18 +51,24 @@ def logsetup(verbosity):
     LOG.debug("Debug logging enabled")
 
 
-def run_tasks(tasktype, con, hostname):
+def run_tasks(tasktype, con, hostname, dryrun):
     """
     run every script in /etc/rebootmgr/pre_boot_tasks or
     /etc/rebootmgr/post_boot_tasks
 
     tasktype is either pre_boot or post_boot
+    dryrun If true the environment variable REBOOTMGR_DRY_RUN=1 is passed to
+           the scripts
     """
+    env = dict(os.environ)
+    if dryrun:
+        env["REBOOTMGR_DRY_RUN"] = "1"
+
     for task in sorted(os.listdir("/etc/rebootmgr/%s_tasks/" % tasktype)):
         task = os.path.join("/etc/rebootmgr/%s_tasks" % tasktype, task)
         LOG.info("Run task %s" % task)
         try:
-            subprocess.run(task, check=True, timeout=(2 * 60 * 60))
+            subprocess.run(task, check=True, env=env, timeout=(2 * 60 * 60))
         except subprocess.TimeoutExpired:
             LOG.error("Could not finish task %s in 2 hours. Exit" % task)
             LOG.error("Disable rebootmgr in consul for this node")
@@ -225,7 +231,7 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
                 con.agent.maintenance(False)
 
                 check_consul_services(con)
-                run_tasks("post_boot", con, hostname)
+                run_tasks("post_boot", con, hostname, dryrun)
                 check_consul_services(con)
 
                 LOG.info("Remove consul key service/rebootmgr/nodes/%s/reboot_required" % hostname)
@@ -266,7 +272,7 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
             check_consul_services(con)
 
             LOG.info("Executing pre reboot tasks")
-            run_tasks("pre_boot", con, hostname)
+            run_tasks("pre_boot", con, hostname, dryrun)
 
             if not lazy_consul_checks:
                 LOG.info("Sleep for 2 minutes. Waiting for consul checks.")
