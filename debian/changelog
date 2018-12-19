@@ -1,3 +1,8 @@
+rebootmgr (0.0.21-0+syseleven1) xenial; urgency=medium
+
+  * In dry-run pass env variable REBOOTMGR_DRY_RUN to tasks
+
+ -- Bodo Petermann <b.petermann@syseleven.de>  Wed,19 Dec 2018 15:08:00 +0100
 rebootmgr (0.0.20-0+syseleven1) xenial; urgency=medium
 
   * Don't restart rebootmgr after update/installation
