@@ -292,6 +292,10 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
                 LOG.info("Global stop flag is set: exit")
                 sys.exit(EXIT_GLOBAL_STOP_FLAG_SET)
 
+            # check again if reboot is still required
+            if check_triggers and not is_reboot_required(con, hostname):
+                sys.exit(0)
+
             if not dryrun:
                 LOG.debug("Write %s in key service/rebootmgr/reboot_in_progress" % hostname)
                 con.kv.put("service/rebootmgr/reboot_in_progress", hostname)
