@@ -69,6 +69,9 @@ def run_tasks(tasktype, con, hostname, dryrun):
         LOG.info("Run task %s" % task)
         try:
             subprocess.run(task, check=True, env=env, timeout=(2 * 60 * 60))
+        except subprocess.CalledProcessError as e:
+            LOG.error("Task %s failed with return code %s. Exit" % (task, e.returncode))
+            sys.exit(EXIT_TASK_FAILED)
         except subprocess.TimeoutExpired:
             LOG.error("Could not finish task %s in 2 hours. Exit" % task)
             LOG.error("Disable rebootmgr in consul for this node")
