@@ -182,6 +182,80 @@ def is_node_disabled(con, hostname):
     return False
 
 
+def post_reboot_state(con, consul_lock, hostname, flags):
+    LOG.info("Found my hostname in service/rebootmgr/reboot_in_progress")
+
+    # Uptime greater 2 hours
+    if flags.get("check_uptime") and uptime() > 2 * 60 * 60:
+        LOG.error("We are in post reboot state but uptime is higher then 2 hours. Exit")
+        sys.exit(EXIT_DID_NOT_REALLY_REBOOT)
+
+    LOG.info("Entering post reboot state")
+    # Disable consul (and Zabbix) maintenance
+    con.agent.maintenance(False)
+
+    check_consul_services(con)
+    run_tasks("post_boot", con, hostname, flags.get("dryrun"))
+    check_consul_services(con)
+
+    LOG.info("Remove consul key service/rebootmgr/nodes/%s/reboot_required" % hostname)
+    con.kv.delete("service/rebootmgr/nodes/%s/reboot_required" % hostname)
+    LOG.info("Remove consul key service/rebootmgr/reboot_in_progress")
+    con.kv.delete("service/rebootmgr/reboot_in_progress")
+
+    consul_lock.release()
+
+
+def pre_reboot_state(con, consul_lock, hostname, flags):
+    today = datetime.date.today()
+    if flags.get("check_holidays") and today in holidays.DE():
+        LOG.info("Refuse to run on holiday")
+        sys.exit(EXIT_HOLIDAY)
+
+    if check_stop_flag(con) and not flags.get("ignore_global_stop_flag"):
+        LOG.info("Global stop flag is set: exit")
+        sys.exit(EXIT_GLOBAL_STOP_FLAG_SET)
+
+    if is_node_disabled(con, hostname) and not flags.get("ignore_global_stop_flag"):
+        LOG.info("Rebootmgr is disabled in consul config for this node. Exit")
+        sys.exit(EXIT_NODE_DISABLED)
+
+    if flags.get("check_triggers") and not is_reboot_required(con, hostname):
+        sys.exit(0)
+
+    LOG.info("Entering pre reboot state")
+
+    check_consul_services(con)
+
+    LOG.info("Executing pre reboot tasks")
+    run_tasks("pre_boot", con, hostname, flags.get("dryrun"))
+
+    if not flags.get("lazy_consul_checksi"):
+        LOG.info("Sleep for 2 minutes. Waiting for consul checks.")
+        time.sleep((60 * 2) + 10)
+
+    check_consul_cluster(con)
+    check_consul_services(con)
+
+    if not consul_lock.acquired:
+        LOG.error("Lost consul lock. Exit")
+        sys.exit(EXIT_CONSUL_LOST_LOCK)
+
+    if check_stop_flag(con) and not flags.get("ignore_global_stop_flag"):
+        LOG.info("Global stop flag is set: exit")
+        sys.exit(EXIT_GLOBAL_STOP_FLAG_SET)
+
+    # check again if reboot is still required
+    if flags.get("check_triggers") and not is_reboot_required(con, hostname):
+        sys.exit(0)
+
+    if not flags.get("dryrun"):
+        LOG.debug("Write %s in key service/rebootmgr/reboot_in_progress" % hostname)
+        con.kv.put("service/rebootmgr/reboot_in_progress", hostname)
+
+    consul_lock.release()
+
+
 @click.command()
 @click.option("-v", "--verbose", count=True, help="Once for INFO logging, twice for DEBUG")
 @click.option("--check-triggers", help="Only reboot if a reboot is necessary", is_flag=True)
@@ -212,6 +286,15 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
 
     check_consul_cluster(con)
 
+    flags = {"check_triggers": check_triggers,
+             "check_uptime": check_uptime,
+             "dryrun": dryrun,
+             "maintenance_reason": maintenance_reason,
+             "ignore_global_stop_flag": ignore_global_stop_flag,
+             "ignore_node_disabled": ignore_node_disabled,
+             "check_holidays": check_holidays,
+             "lazy_consul_checks": lazy_consul_checks}
+
     # Get Lock
     with Lock(con, "service/rebootmgr/lock") as consul_lock:
         if not consul_lock.acquire(blocking=False):
@@ -221,82 +304,18 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
         reboot_in_progress = check_reboot_in_progress(con)
         if reboot_in_progress:
             if reboot_in_progress.startswith(hostname):
-                LOG.info("Found my hostname in service/rebootmgr/reboot_in_progress")
-                LOG.info("Entering post reboot state")
-
-                # Uptime greater 2 hours
-                if check_uptime and uptime() > 2 * 60 * 60:
-                    LOG.error("We are in post reboot state but uptime is higher then 2 hours. Exit")
-                    sys.exit(EXIT_DID_NOT_REALLY_REBOOT)
-
-                LOG.info("Entering post reboot state")
-                # Disable consul (and Zabbix) maintenance
-                con.agent.maintenance(False)
-
-                check_consul_services(con)
-                run_tasks("post_boot", con, hostname, dryrun)
-                check_consul_services(con)
-
-                LOG.info("Remove consul key service/rebootmgr/nodes/%s/reboot_required" % hostname)
-                con.kv.delete("service/rebootmgr/nodes/%s/reboot_required" % hostname)
-                LOG.info("Remove consul key service/rebootmgr/reboot_in_progress")
-                con.kv.delete("service/rebootmgr/reboot_in_progress")
-
-                consul_lock.release()
+                # We are in post_reboot state
+                post_reboot_state(con, consul_lock, hostname, flags)
                 sys.exit(0)
-
             # Another node has the lock
             else:
                 LOG.info("Another Node %s is rebooting. Exit" % reboot_in_progress)
                 sys.exit(EXIT_CONSUL_LOCK_FAILED)
-
         # consul-key reboot_in_progress does not exist
         # we are free to reboot
         else:
             # We are in pre_reboot state
-            today = datetime.date.today()
-            if check_holidays and today in holidays.DE():
-                LOG.info("Refuse to run on holiday")
-                sys.exit(EXIT_HOLIDAY)
-
-            if check_stop_flag(con) and not ignore_global_stop_flag:
-                LOG.info("Global stop flag is set: exit")
-                sys.exit(EXIT_GLOBAL_STOP_FLAG_SET)
-
-            if is_node_disabled(con, hostname) and not ignore_node_disabled:
-                LOG.info("Rebootmgr is disabled in consul config for this node. Exit")
-                sys.exit(EXIT_NODE_DISABLED)
-
-            if check_triggers and not is_reboot_required(con, hostname):
-                sys.exit(0)
-
-            LOG.info("Entering pre reboot state")
-
-            check_consul_services(con)
-
-            LOG.info("Executing pre reboot tasks")
-            run_tasks("pre_boot", con, hostname, dryrun)
-
-            if not lazy_consul_checks:
-                LOG.info("Sleep for 2 minutes. Waiting for consul checks.")
-                time.sleep((60 * 2) + 10)
-
-            check_consul_cluster(con)
-            check_consul_services(con)
-
-            if not consul_lock.acquired:
-                LOG.error("Lost consul lock. Exit")
-                sys.exit(EXIT_CONSUL_LOST_LOCK)
-
-            if check_stop_flag(con) and not ignore_global_stop_flag:
-                LOG.info("Global stop flag is set: exit")
-                sys.exit(EXIT_GLOBAL_STOP_FLAG_SET)
-
-            if not dryrun:
-                LOG.debug("Write %s in key service/rebootmgr/reboot_in_progress" % hostname)
-                con.kv.put("service/rebootmgr/reboot_in_progress", hostname)
-
-            consul_lock.release()
+            pre_reboot_state(con, consul_lock, hostname, flags)
 
             if not dryrun:
                 # Set a consul maintenance, which creates a 15 maintenance window in Zabbix
