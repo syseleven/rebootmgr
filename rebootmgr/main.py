@@ -230,7 +230,7 @@ def pre_reboot_state(con, consul_lock, hostname, flags):
     LOG.info("Executing pre reboot tasks")
     run_tasks("pre_boot", con, hostname, flags.get("dryrun"))
 
-    if not flags.get("lazy_consul_checksi"):
+    if not flags.get("lazy_consul_checks"):
         LOG.info("Sleep for 2 minutes. Waiting for consul checks.")
         time.sleep((60 * 2) + 10)
 
