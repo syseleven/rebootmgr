@@ -9,6 +9,7 @@ import time
 import colorlog
 import holidays
 import datetime
+from typing import List, Optional
 
 from retrying import retry
 from consul import Consul
@@ -31,6 +32,7 @@ EXIT_TASK_FAILED = 100
 EXIT_NODE_DISABLED = 101
 EXIT_GLOBAL_STOP_FLAG_SET = 102
 EXIT_DID_NOT_REALLY_REBOOT = 103
+EXIT_CONFIGURATION_IS_MISSING = 104
 
 
 def logsetup(verbosity):
@@ -75,21 +77,19 @@ def run_tasks(tasktype, con, hostname, dryrun):
         except subprocess.TimeoutExpired:
             LOG.error("Could not finish task %s in 2 hours. Exit" % task)
             LOG.error("Disable rebootmgr in consul for this node")
-            idx, data = con.kv.get("service/rebootmgr/nodes/%s/config" % hostname)
-            data = json.loads(data["Value"].decode())
-            data["enabled"] = False
+            data = get_config(con, hostname)
+            data["disabled"] = True
             data["message"] = "Could not finish task %s in 2 hours" % task
-            con.kv.put("service/rebootmgr/nodes/%s/config" % hostname, json.dumps(data))
+            put_config(con, hostname)
             con.kv.delete("service/rebootmgr/reboot_in_progress")
             sys.exit(EXIT_TASK_FAILED)
         LOG.info("task %s finished" % task)
 
 
-def get_whitelist(con):
+def get_whitelist(con) -> List[str]:
     """
-    Reads a list of host which should be ignored
+    Reads a list of host which should be ignored. May be absent.
     """
-
     k, v = con.kv.get("service/rebootmgr/ignore_failed_checks")
     if v and "Value" in v.keys() and v["Value"]:
         return json.loads(v["Value"].decode())
@@ -113,28 +113,29 @@ def check_consul_services(con):
         if check["Node"] in whitelist:
             continue
 
-        LOG.error("There were failed consul checks. Exit")
+        LOG.error("There were failed consul checks. Exit.")
         sys.exit(EXIT_CONSUL_CHECKS_FAILED)
 
-    LOG.info("All checks passed")
+    LOG.info("All consul checks passed.")
 
 
 @retry(wait_fixed=2000, stop_max_delay=20000)
 def check_reboot_in_progress(con):
     """
-    check for the key service/rebootmgr/reboot_in_progress
-    If the key contains the nodename, this node is in post reboot state
+    Check for the key service/rebootmgr/reboot_in_progress.
+    If the key contains the nodename, this node is in post reboot state.
+    The key may be absent.
     """
     k, v = con.kv.get("service/rebootmgr/reboot_in_progress")
     if v and "Value" in v.keys() and v["Value"]:
         return v["Value"].decode()
-    return False
+    return ""
 
 
 @retry(wait_fixed=2000, stop_max_delay=20000)
-def check_stop_flag(con):
+def check_stop_flag(con) -> bool:
     """
-    check the global stop flag
+    Check the global stop flag. Present is True, absent is False.
     """
     k, v = con.kv.get("service/rebootmgr/stop")
     if v:
@@ -143,7 +144,10 @@ def check_stop_flag(con):
 
 
 @retry(wait_fixed=2000, stop_max_delay=20000)
-def is_reboot_required(con, nodename):
+def is_reboot_required(con, nodename) -> bool:
+    """
+    Check the node's reboot_required flags. Present is True, absent is False.
+    """
     k, v = con.kv.get("service/rebootmgr/nodes/%s/reboot_required" % nodename)
     if v:
         LOG.debug("Found key %s. Reboot required" % nodename)
@@ -155,13 +159,13 @@ def is_reboot_required(con, nodename):
     return False
 
 
-def uptime():
+def uptime() -> float:
     with open('/proc/uptime', 'r') as f:
         uptime = float(f.readline().split()[0])
         return uptime
 
 
-def check_consul_cluster(con):
+def check_consul_cluster(con) -> None:
     whitelist = get_whitelist(con)
     if whitelist:
         LOG.warning("Status of the following hosts will be ignored, " +
@@ -173,13 +177,9 @@ def check_consul_cluster(con):
 
 
 @retry(wait_fixed=2000, stop_max_delay=20000)
-def is_node_disabled(con, hostname):
-    idx, data = con.kv.get("service/rebootmgr/nodes/%s/config" % hostname)
-    if data and "Value" in data.keys() and data["Value"]:
-        data = json.loads(data["Value"].decode())
-        if "disabled" in data.keys() and data["disabled"]:
-            return True
-    return False
+def is_node_disabled(con, hostname) -> bool:
+    data = get_config(con, hostname)
+    return data.get('disabled', True)
 
 
 def post_reboot_state(con, consul_lock, hostname, flags):
@@ -252,8 +252,65 @@ def pre_reboot_state(con, consul_lock, hostname, flags):
     if not flags.get("dryrun"):
         LOG.debug("Write %s in key service/rebootmgr/reboot_in_progress" % hostname)
         con.kv.put("service/rebootmgr/reboot_in_progress", hostname)
+    else:
+        LOG.debug("Would write %s in key service/rebootmgr/reboot_in_progress" % hostname)
 
     consul_lock.release()
+
+
+def get_config(con, hostname) -> dict:
+    """
+    Get the node's config data. It should be a JSON dictionary.
+
+    If the config is absent, the rebootmgr should consider itself disabled.
+    """
+    idx, data = con.kv.get("service/rebootmgr/nodes/%s/config" % hostname)
+
+    try:
+        if data and "Value" in data.keys() and data["Value"]:
+            data = json.loads(data["Value"].decode())
+            if isinstance(data, dict):
+                return data
+    except:
+        pass
+
+    LOG.error("Configuration data missing or malformed.")
+    return {}
+
+
+def put_config(con, hostname, config):
+    con.kv.put("service/rebootmgr/nodes/%s/config" % hostname, json.dumps(config))
+
+
+def config_is_present_and_valid(con, hostname) -> bool:
+    """
+    Checks if there is configuration for this node and does minimal validation.
+
+    If the config is absent or not valid,
+    the rebootmgr should consider itself disabled.
+    """
+    config = get_config(con, hostname)
+    if 'disabled' not in config:
+        return False
+
+    return True
+
+
+def ensure_configuration(con, hostname, dryrun) -> bool:
+    """
+    Make sure there is a configuration set up for this node.
+
+    If there already is one that looks valid, don't change it.
+    """
+    if not config_is_present_and_valid(con, hostname):
+        config = {
+            "disabled": False,  # maybe default should be True?
+            "message": "Default config created",
+        }
+        if not dryrun:
+            put_config(con, hostname, config)
+        return True
+    return False
 
 
 @click.command()
@@ -272,9 +329,10 @@ def pre_reboot_state(con, consul_lock, hostname, flags):
               default=os.environ.get("REBOOTMGR_CONSUL_ADDR", "127.0.0.1"))
 @click.option("--consul-port", help="Port of Consul. Default env REBOOTMGR_CONSUL_PORT or 8500",
               default=os.environ.get("REBOOTMGR_CONSUL_PORT", 8500))
+@click.option("--ensure-config", help="If there is no valid configuration in consul, create a default one.", is_flag=True)
 @click.version_option()
 def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, maintenance_reason, ignore_global_stop_flag,
-        ignore_node_disabled, check_holidays, lazy_consul_checks):
+        ignore_node_disabled, check_holidays, lazy_consul_checks, ensure_config):
     """Reboot Manager
 
     Default values of parameteres are environment variables (if set)
@@ -283,6 +341,20 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
 
     con = Consul(host=consul, port=int(consul_port))
     hostname = socket.gethostname().split(".")[0]
+
+    if ensure_config:
+        if ensure_configuration(con, hostname, dryrun):
+            LOG.warning("Created default configuration, "
+                        "since it was missing or invalid. Exit.")
+        else:
+            LOG.debug("Did not create default configuration, "
+                      "since there already was one. Exit.")
+        sys.exit(0)
+
+    if not config_is_present_and_valid(con, hostname):
+        LOG.error("The configuration of this node (%s) seems to be missing. "
+                  "Exit." % hostname)
+        sys.exit(EXIT_CONFIGURATION_IS_MISSING)
 
     check_consul_cluster(con)
 
@@ -298,7 +370,7 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
     # Get Lock
     with Lock(con, "service/rebootmgr/lock") as consul_lock:
         if not consul_lock.acquire(blocking=False):
-            LOG.error("Could not get consul lock. Exit")
+            LOG.error("Could not get consul lock. Exit.")
             sys.exit(EXIT_CONSUL_LOCK_FAILED)
 
         reboot_in_progress = check_reboot_in_progress(con)
@@ -309,7 +381,7 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
                 sys.exit(0)
             # Another node has the lock
             else:
-                LOG.info("Another Node %s is rebooting. Exit" % reboot_in_progress)
+                LOG.info("Another Node %s is rebooting. Exit." % reboot_in_progress)
                 sys.exit(EXIT_CONSUL_LOCK_FAILED)
         # consul-key reboot_in_progress does not exist
         # we are free to reboot
