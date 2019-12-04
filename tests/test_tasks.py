@@ -7,7 +7,7 @@ from rebootmgr.main import cli as rebootmgr
 
 
 @pytest.mark.xfail  # TODO(sneubauer): Fix bug in rebootmgr
-def test_reboot_task_timeout(run_cli, forward_consul_port, consul_cluster, reboot_task, mocker):
+def test_reboot_task_timeout(run_cli, consul_cluster, forward_consul_port, default_config, reboot_task, mocker):
     mocker.patch("time.sleep")
     reboot_task("pre_boot", "00_some_task.sh", raise_timeout_expired=True)
 
@@ -23,8 +23,8 @@ def test_reboot_task_timeout(run_cli, forward_consul_port, consul_cluster, reboo
     }
 
 
-def test_reboot_task_timeout_with_preexisting_config(run_cli, forward_consul_port, consul_cluster, reboot_task, mocker):
-    consul_cluster[0].kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"test_preserved": true}')
+def test_reboot_task_timeout_with_preexisting_config(run_cli, consul_cluster, forward_consul_port, reboot_task, mocker):
+    consul_cluster[0].kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"disabled": false, "test_preserved": true}')
     mocker.patch("time.sleep")
     reboot_task("pre_boot", "00_some_task.sh", raise_timeout_expired=True)
 
@@ -36,13 +36,13 @@ def test_reboot_task_timeout_with_preexisting_config(run_cli, forward_consul_por
     _, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
     assert json.loads(data["Value"].decode()) == {
         "test_preserved": True,
-        "enabled": False,
+        "disabled": True,
         "message": "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 2 hours"
     }
 
 
 @pytest.mark.xfail  # TODO(sneubauer): Fix bug in rebootmgr
-def test_post_reboot_phase_task_timeout(run_cli, forward_consul_port, consul_cluster, reboot_task, mocker):
+def test_post_reboot_phase_task_timeout(run_cli, consul_cluster, forward_consul_port, default_config, reboot_task, mocker):
     reboot_task("post_boot", "50_another_task.sh", raise_timeout_expired=True)
 
     mocker.patch("time.sleep")

@@ -9,7 +9,7 @@ import time
 import colorlog
 import holidays
 import datetime
-from typing import List, Optional
+from typing import List
 
 from retrying import retry
 from consul import Consul
@@ -80,7 +80,7 @@ def run_tasks(tasktype, con, hostname, dryrun):
             data = get_config(con, hostname)
             data["disabled"] = True
             data["message"] = "Could not finish task %s in 2 hours" % task
-            put_config(con, hostname)
+            put_config(con, hostname, data)
             con.kv.delete("service/rebootmgr/reboot_in_progress")
             sys.exit(EXIT_TASK_FAILED)
         LOG.info("task %s finished" % task)
@@ -271,7 +271,7 @@ def get_config(con, hostname) -> dict:
             data = json.loads(data["Value"].decode())
             if isinstance(data, dict):
                 return data
-    except:
+    except Exception:
         pass
 
     LOG.error("Configuration data missing or malformed.")

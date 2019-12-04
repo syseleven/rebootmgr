@@ -2,6 +2,7 @@ import time
 import json
 import logging
 import requests
+import socket
 import subprocess
 
 from unittest.mock import DEFAULT
@@ -121,6 +122,13 @@ def reboot_task(mocker, mock_subprocess_run):
             side_effect)
 
     return create_task
+
+
+@pytest.fixture
+def default_config(consul_cluster):
+    hostname = socket.gethostname()
+    key = "service/rebootmgr/nodes/%s/config" % hostname
+    consul_cluster[0].kv.put(key, '{"disabled": false}')
 
 
 @pytest.fixture

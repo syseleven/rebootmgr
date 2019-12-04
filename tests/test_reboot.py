@@ -3,7 +3,15 @@ import socket
 from rebootmgr.main import cli as rebootmgr
 
 
-def test_reboot_fails_without_tasks(run_cli, forward_consul_port):
+def test_reboot_fails_without_config(run_cli, forward_consul_port):
+    result = run_cli(rebootmgr, ["-v"], catch_exceptions=True)
+
+    assert "Configuration data missing" in result.output
+    assert "Executing pre reboot tasks" not in result.output
+    assert result.exit_code == 104
+
+
+def test_reboot_fails_without_tasks(run_cli, forward_consul_port, default_config):
     result = run_cli(rebootmgr, ["-v"], catch_exceptions=True)
 
     assert "Executing pre reboot tasks" in result.output
@@ -11,7 +19,7 @@ def test_reboot_fails_without_tasks(run_cli, forward_consul_port):
     assert isinstance(result.exception, FileNotFoundError)
 
 
-def test_reboot_success_with_tasks(run_cli, forward_consul_port, reboot_task, mock_subprocess_run, mocker):
+def test_reboot_success_with_tasks(run_cli, forward_consul_port, default_config, reboot_task, mock_subprocess_run, mocker):
     mocked_sleep = mocker.patch("time.sleep")
     reboot_task("pre_boot", "00_some_task.sh")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
@@ -28,7 +36,7 @@ def test_reboot_success_with_tasks(run_cli, forward_consul_port, reboot_task, mo
     mocked_sleep.assert_any_call(130)
 
 
-def test_reboot_fail(run_cli, forward_consul_port, reboot_task, mock_subprocess_run, mocker):
+def test_reboot_fail(run_cli, forward_consul_port, default_config, reboot_task, mock_subprocess_run, mocker):
     mocked_sleep = mocker.patch("time.sleep")
 
     mocked_run = mock_subprocess_run(
@@ -46,7 +54,7 @@ def test_reboot_fail(run_cli, forward_consul_port, reboot_task, mock_subprocess_
     mocked_sleep.assert_any_call(130)
 
 
-def test_reboot_fails_if_another_reboot_is_in_progress(run_cli, forward_consul_port, consul_cluster):
+def test_reboot_fails_if_another_reboot_is_in_progress(run_cli, forward_consul_port, default_config, consul_cluster):
     consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", "some_hostname")
 
     result = run_cli(rebootmgr, ["-v"])
@@ -55,7 +63,7 @@ def test_reboot_fails_if_another_reboot_is_in_progress(run_cli, forward_consul_p
     assert result.exit_code == 4
 
 
-def test_post_reboot_phase_fails_without_tasks(run_cli, forward_consul_port, consul_cluster):
+def test_post_reboot_phase_fails_without_tasks(run_cli, forward_consul_port, default_config, consul_cluster):
     consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", socket.gethostname())
 
     result = run_cli(rebootmgr, ["-v"], catch_exceptions=True)
@@ -65,7 +73,7 @@ def test_post_reboot_phase_fails_without_tasks(run_cli, forward_consul_port, con
     assert isinstance(result.exception, FileNotFoundError)
 
 
-def test_post_reboot_phase_success_with_tasks(run_cli, forward_consul_port, consul_cluster, reboot_task):
+def test_post_reboot_phase_success_with_tasks(run_cli, forward_consul_port, default_config, consul_cluster, reboot_task):
     reboot_task("post_boot", "50_another_task.sh")
 
     consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", socket.gethostname())
