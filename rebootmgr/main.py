@@ -410,4 +410,4 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
 
 
 if __name__ == "__main__":
-    cli()
+    cli()  # pragma: no cover
