@@ -29,6 +29,8 @@ def consul_cluster():
         resp.raise_for_status()
         for c in clients:
             c.agent.maintenance(False)
+            for name, service in c.agent.services().items():
+                c.agent.service.deregister(name)
 
 
 @pytest.fixture

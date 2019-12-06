@@ -1,12 +1,9 @@
 import json
 import socket
 
-import pytest
-
 from rebootmgr.main import cli as rebootmgr
 
 
-@pytest.mark.xfail  # TODO(sneubauer): Fix bug in rebootmgr
 def test_reboot_task_timeout(run_cli, consul_cluster, forward_consul_port, default_config, reboot_task, mocker):
     mocker.patch("time.sleep")
     reboot_task("pre_boot", "00_some_task.sh", raise_timeout_expired=True)
@@ -18,9 +15,26 @@ def test_reboot_task_timeout(run_cli, consul_cluster, forward_consul_port, defau
 
     _, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
     assert json.loads(data["Value"].decode()) == {
-        "enabled": False,
+        "disabled": True,
         "message": "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 2 hours"
     }
+    # TODO(oseibert): check that shutdown is NOT called.
+
+
+def test_reboot_preboot_task_fails(run_cli, consul_cluster, forward_consul_port, default_config, reboot_task, mocker):
+    mocker.patch("time.sleep")
+    reboot_task("pre_boot", "00_some_task.sh", exit_code=1)
+
+    result = run_cli(rebootmgr)
+
+    assert "Task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh failed with return code 1" in result.output
+    assert result.exit_code == 100
+
+    _, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
+    assert json.loads(data["Value"].decode()) == {
+        "disabled": False,
+    }
+    # TODO(oseibert): check that shutdown is NOT called.
 
 
 def test_reboot_task_timeout_with_preexisting_config(run_cli, consul_cluster, forward_consul_port, reboot_task, mocker):
@@ -39,9 +53,9 @@ def test_reboot_task_timeout_with_preexisting_config(run_cli, consul_cluster, fo
         "disabled": True,
         "message": "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 2 hours"
     }
+    # TODO(oseibert): check that shutdown is NOT called.
 
 
-@pytest.mark.xfail  # TODO(sneubauer): Fix bug in rebootmgr
 def test_post_reboot_phase_task_timeout(run_cli, consul_cluster, forward_consul_port, default_config, reboot_task, mocker):
     reboot_task("post_boot", "50_another_task.sh", raise_timeout_expired=True)
 
@@ -50,11 +64,11 @@ def test_post_reboot_phase_task_timeout(run_cli, consul_cluster, forward_consul_
 
     result = run_cli(rebootmgr)
 
-    assert "Could not finish task /etc/rebootmgr/pre_boot_tasks/50_another_task.sh in 2 hours" in result.output
+    assert "Could not finish task /etc/rebootmgr/post_boot_tasks/50_another_task.sh in 2 hours" in result.output
     assert result.exit_code == 100
 
     _, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
     assert json.loads(data["Value"].decode()) == {
-        "enabled": False,
-        "message": "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 2 hours"
+        "disabled": True,
+        "message": "Could not finish task /etc/rebootmgr/post_boot_tasks/50_another_task.sh in 2 hours"
     }
