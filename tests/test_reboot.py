@@ -3,6 +3,7 @@ import socket
 from rebootmgr.main import cli as rebootmgr
 from unittest.mock import mock_open
 
+
 def test_reboot_fails_without_config(run_cli, forward_consul_port):
     result = run_cli(rebootmgr, ["-v"], catch_exceptions=True)
 
@@ -56,7 +57,7 @@ def test_dryrun_reboot_success_with_tasks(run_cli, forward_consul_port,
     assert "in key service/rebootmgr/reboot_in_progress" in result.output
     assert result.exit_code == 0
 
-    mocked_run.assert_called_once()
+    assert mocked_run.call_count == 1
     args, kwargs = mocked_run.call_args
     assert args[0] == "/etc/rebootmgr/pre_boot_tasks/00_some_task.sh"
     assert 'env' in kwargs
@@ -120,10 +121,11 @@ def test_post_reboot_phase_success_with_tasks(run_cli, forward_consul_port, defa
     assert result.exit_code == 0
     assert "50_another_task.sh" in result.output
 
+
 def test_post_reboot_phase_failure_with_uptime(run_cli, forward_consul_port,
                                                default_config, consul_cluster,
                                                reboot_task, mocker):
-    mocked_open = mocker.patch('__main__.open', new=mock_open(read_data='99999999.9 99999999.9'))
+    mocker.patch('rebootmgr.main.open', new=mock_open(read_data='99999999.9 99999999.9'))
     reboot_task("post_boot", "50_another_task.sh")
 
     consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", socket.gethostname())
