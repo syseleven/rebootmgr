@@ -367,8 +367,9 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
              "check_holidays": check_holidays,
              "lazy_consul_checks": lazy_consul_checks}
 
-    # Get Lock
-    with Lock(con, "service/rebootmgr/lock") as consul_lock:
+    consul_lock = Lock(con, "service/rebootmgr/lock")
+    try:
+        # Try to get Lock without waiting
         if not consul_lock.acquire(blocking=False):
             LOG.error("Could not get consul lock. Exit.")
             sys.exit(EXIT_CONSUL_LOCK_FAILED)
@@ -404,6 +405,8 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
                     LOG.error("Remove consul key service/rebootmgr/reboot_in_progress")
                     con.kv.delete("service/rebootmgr/reboot_in_progress")
                     raise e
+    finally:
+        consul_lock.release()
 
 
 if __name__ == "__main__":
