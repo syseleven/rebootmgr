@@ -11,7 +11,7 @@ On a very high level, the functionality can be summarized with the following bul
 
 ## Configuration options
 
-You can configure rebootmgr in your cluster using the consul kv store.
+You can configure rebootmgr in your cluster using the consul key/value (kv) store.
 
 ### Global stop flag (`service/rebootmgr/stop`)
 
@@ -37,15 +37,24 @@ $ consul kv put service/rebootmgr/ignore_failed_checks '["some_hostname"]'
 
 ### Host-specific configuration (`service/rebootmgr/nodes/{hostname}/config`)
 
-Reboot Manager will be enabled on all hosts by default.
+You can enable or disable Reboot Manager on individual hosts using this key.
 
-You can disable reboot manager on certain hosts using this key.
+Reboot Manager will allow reboots only if this configuration is present and
+well-formed, so by default, Reboot Manager will be disabled[^1].
+
+To ensure that the configuration is present:
+```
+some_hostname$ rebootmgr --ensure-config
+```
+If the configuration is absent or invalid, it will create it, allowing reboots.
 
 Example for disabling reboot manager on `some_hostname`:
+```
+$ consul kv put service/rebootmgr/nodes/some_hostname/config '{"disabled": true}'
+```
 
-```
-$ consul kv put service/rebootmgr/nodes/some_hostname/config '{"enabled": False}'
-```
+[^1]: This is the reverse of earlier versions. We decided for safety reasons to
+allow reboots only when the configuration is properly present.
 
 ## Consul service monitoring
 
