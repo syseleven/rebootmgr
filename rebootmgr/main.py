@@ -1,5 +1,6 @@
 import os
 import click
+import getpass
 import logging
 import socket
 import sys
@@ -313,15 +314,20 @@ def ensure_configuration(con, hostname, dryrun) -> bool:
     return False
 
 
+def getuser():
+    user = os.environ.get('SUDO_USER')
+    return user or getpass.getuser()
+
+
 def do_set_global_stop_flag(con, dc):
-    reason = "Set by " + os.environ.get("LOGNAME", "(unknown)")\
+    reason = "Set by " + getuser()\
              + " " + str(datetime.datetime.now())
     con.kv.put("service/rebootmgr/stop", reason, dc=dc)
     LOG.warning("Set %s global stop flag: %s", dc, reason)
 
 
 def do_set_local_stop_flag(con, hostname):
-    reason = "Node disabled by " + os.environ.get("LOGNAME", "(unknown)")\
+    reason = "Node disabled by " + getuser()\
              + " " + str(datetime.datetime.now())
     config = get_config(con, hostname)
     config["disabled"] = True
