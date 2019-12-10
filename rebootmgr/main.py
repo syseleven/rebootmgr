@@ -313,6 +313,23 @@ def ensure_configuration(con, hostname, dryrun) -> bool:
     return False
 
 
+def do_set_global_stop_flag(con, dc):
+    reason = "Set by " + os.environ.get("LOGNAME", "(unknown)")\
+             + " " + str(datetime.datetime.now())
+    con.kv.put("service/rebootmgr/stop", reason, dc=dc)
+    LOG.warning("Set %s global stop flag: %s", dc, reason)
+
+
+def do_set_local_stop_flag(con, hostname):
+    reason = "Node disabled by " + os.environ.get("LOGNAME", "(unknown)")\
+             + " " + str(datetime.datetime.now())
+    config = get_config(con, hostname)
+    config["disabled"] = True
+    config["message"] = reason
+    put_config(con, hostname, config)
+    LOG.warning("Set %s local stop flag: %s", hostname, reason)
+
+
 @click.command()
 @click.option("-v", "--verbose", count=True, help="Once for INFO logging, twice for DEBUG")
 @click.option("--check-triggers", help="Only reboot if a reboot is necessary", is_flag=True)
@@ -330,9 +347,12 @@ def ensure_configuration(con, hostname, dryrun) -> bool:
 @click.option("--consul-port", help="Port of Consul. Default env REBOOTMGR_CONSUL_PORT or 8500",
               default=os.environ.get("REBOOTMGR_CONSUL_PORT", 8500))
 @click.option("--ensure-config", help="If there is no valid configuration in consul, create a default one.", is_flag=True)
+@click.option("--set-global-stop-flag", help="Stop the rebootmgr cluster-wide in the specified cluster")
+@click.option("--set-local-stop-flag", help="Stop the rebootmgr on this node", is_flag=True)
 @click.version_option()
 def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, maintenance_reason, ignore_global_stop_flag,
-        ignore_node_disabled, check_holidays, lazy_consul_checks, ensure_config):
+        ignore_node_disabled, check_holidays, lazy_consul_checks, ensure_config,
+        set_global_stop_flag, set_local_stop_flag):
     """Reboot Manager
 
     Default values of parameteres are environment variables (if set)
@@ -349,6 +369,14 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
         else:
             LOG.debug("Did not create default configuration, "
                       "since there already was one. Exit.")
+        sys.exit(0)
+
+    if set_global_stop_flag:
+        do_set_global_stop_flag(con, set_global_stop_flag)
+        sys.exit(0)
+
+    if set_local_stop_flag:
+        do_set_local_stop_flag(con, hostname)
         sys.exit(0)
 
     if not config_is_present_and_valid(con, hostname):

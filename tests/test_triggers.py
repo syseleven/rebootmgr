@@ -171,7 +171,6 @@ def test_reboot_when_node_disabled_after_sleep(
 
     mocked_sleep.assert_any_call(130)
     mocked_run.assert_not_called()
-    assert "Reboot now ..." in result.output
     assert result.exit_code == 101
 
 
