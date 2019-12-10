@@ -216,7 +216,7 @@ def pre_reboot_state(con, consul_lock, hostname, flags):
         LOG.info("Global stop flag is set: exit")
         sys.exit(EXIT_GLOBAL_STOP_FLAG_SET)
 
-    if is_node_disabled(con, hostname) and not flags.get("ignore_global_stop_flag"):
+    if is_node_disabled(con, hostname) and not flags.get("ignore_node_disabled"):
         LOG.info("Rebootmgr is disabled in consul config for this node. Exit")
         sys.exit(EXIT_NODE_DISABLED)
 

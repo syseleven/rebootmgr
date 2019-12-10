@@ -145,12 +145,14 @@ def test_reboot_when_node_disabled_but_ignored(
     mocked_sleep = mocker.patch("time.sleep")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
 
-    result = run_cli(rebootmgr, ["-v", "--ignore-global-stop-flag"])
+    result = run_cli(rebootmgr, ["-v", "--ignore-node-disabled"])
 
     mocked_sleep.assert_any_call(130)
     mocked_run.assert_any_call(["shutdown", "-r", "+1"], check=True)
     assert "Reboot now ..." in result.output
     assert result.exit_code == 0
+
+# TODO(oseibert): Should a MISSING configuration also be ignored with --ignore-node-disabled?
 
 # TODO(oseibert): Fix this bug.
 @pytest.mark.xfail
