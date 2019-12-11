@@ -130,7 +130,7 @@ def reboot_task(mocker, mock_subprocess_run):
 def default_config(consul_cluster):
     hostname = socket.gethostname()
     key = "service/rebootmgr/nodes/%s/config" % hostname
-    consul_cluster[0].kv.put(key, '{"disabled": false}')
+    consul_cluster[0].kv.put(key, '{"enabled": true}')
 
 
 @pytest.fixture

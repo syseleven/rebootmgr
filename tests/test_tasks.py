@@ -15,7 +15,7 @@ def test_reboot_task_timeout(run_cli, consul_cluster, forward_consul_port, defau
 
     _, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
     assert json.loads(data["Value"].decode()) == {
-        "disabled": True,
+        "enabled": False,
         "message": "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 2 hours"
     }
     # TODO(oseibert): check that shutdown is NOT called.
@@ -32,13 +32,13 @@ def test_reboot_preboot_task_fails(run_cli, consul_cluster, forward_consul_port,
 
     _, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
     assert json.loads(data["Value"].decode()) == {
-        "disabled": False,
+        "enabled": True,
     }
     # TODO(oseibert): check that shutdown is NOT called.
 
 
 def test_reboot_task_timeout_with_preexisting_config(run_cli, consul_cluster, forward_consul_port, reboot_task, mocker):
-    consul_cluster[0].kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"disabled": false, "test_preserved": true}')
+    consul_cluster[0].kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"enabled": true, "test_preserved": true}')
     mocker.patch("time.sleep")
     reboot_task("pre_boot", "00_some_task.sh", raise_timeout_expired=True)
 
@@ -50,7 +50,7 @@ def test_reboot_task_timeout_with_preexisting_config(run_cli, consul_cluster, fo
     _, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
     assert json.loads(data["Value"].decode()) == {
         "test_preserved": True,
-        "disabled": True,
+        "enabled": False,
         "message": "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 2 hours"
     }
     # TODO(oseibert): check that shutdown is NOT called.
@@ -69,6 +69,6 @@ def test_post_reboot_phase_task_timeout(run_cli, consul_cluster, forward_consul_
 
     _, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
     assert json.loads(data["Value"].decode()) == {
-        "disabled": True,
+        "enabled": False,
         "message": "Could not finish task /etc/rebootmgr/post_boot_tasks/50_another_task.sh in 2 hours"
     }

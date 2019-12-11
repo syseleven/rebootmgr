@@ -79,7 +79,7 @@ def run_tasks(tasktype, con, hostname, dryrun):
             LOG.error("Could not finish task %s in 2 hours. Exit" % task)
             LOG.error("Disable rebootmgr in consul for this node")
             data = get_config(con, hostname)
-            data["disabled"] = True
+            data["enabled"] = False
             data["message"] = "Could not finish task %s in 2 hours" % task
             put_config(con, hostname, data)
             con.kv.delete("service/rebootmgr/reboot_in_progress")
@@ -180,7 +180,7 @@ def check_consul_cluster(con) -> None:
 @retry(wait_fixed=2000, stop_max_delay=20000)
 def is_node_disabled(con, hostname) -> bool:
     data = get_config(con, hostname)
-    return data.get('disabled', True)
+    return not data.get('enabled', False)
 
 
 def post_reboot_state(con, consul_lock, hostname, flags):
@@ -291,7 +291,7 @@ def config_is_present_and_valid(con, hostname) -> bool:
     the rebootmgr should consider itself disabled.
     """
     config = get_config(con, hostname)
-    if 'disabled' not in config:
+    if 'enabled' not in config:
         return False
 
     return True
@@ -305,7 +305,7 @@ def ensure_configuration(con, hostname, dryrun) -> bool:
     """
     if not config_is_present_and_valid(con, hostname):
         config = {
-            "disabled": False,  # maybe default should be True?
+            "enabled": True,  # maybe default should be False?
             "message": "Default config created",
         }
         if not dryrun:
@@ -330,7 +330,7 @@ def do_set_local_stop_flag(con, hostname):
     reason = "Node disabled by " + getuser()\
              + " " + str(datetime.datetime.now())
     config = get_config(con, hostname)
-    config["disabled"] = True
+    config["enabled"] = False
     config["message"] = reason
     put_config(con, hostname, config)
     LOG.warning("Set %s local stop flag: %s", hostname, reason)
