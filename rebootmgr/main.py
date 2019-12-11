@@ -269,14 +269,22 @@ def get_config(con, hostname) -> dict:
 
     try:
         if data and "Value" in data.keys() and data["Value"]:
-            data = json.loads(data["Value"].decode())
-            if isinstance(data, dict):
-                return data
+            config = json.loads(data["Value"].decode())
+            if isinstance(config, dict):
+                maybe_migrate_config(con, hostname, config)
+                return config
     except Exception:
         pass
 
     LOG.error("Configuration data missing or malformed.")
     return {}
+
+
+def maybe_migrate_config(con, hostname, config):
+    if 'disabled' in config and 'enabled' not in config:
+        config['enabled'] = not config['disabled']
+        del config['disabled']
+        put_config(con, hostname, config)
 
 
 def put_config(con, hostname, config):
