@@ -33,6 +33,17 @@ services:
     depends_on: [consul1, consul2, consul3, consul4]
     command:
       ["tox", "-e", "py37"]
+  integration_tests_py38:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: 3.8
+    volumes:
+      - .:/src
+    depends_on: [consul1, consul2, consul3, consul4]
+    command:
+      ["tox", "-e", "py38"]
   lint:
     build:
       context: .
