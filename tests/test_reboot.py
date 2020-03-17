@@ -167,7 +167,7 @@ def test_post_reboot_succeeds_with_current_node_in_maintenance(
     # Redo config since "our hostname" has changed.
     hostname = socket.gethostname()
     key = "service/rebootmgr/nodes/%s/config" % hostname
-    consul_cluster[0].kv.put(key, '{"disabled": false}')
+    consul_cluster[0].kv.put(key, '{"enabled": true}')
 
     consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", hostname)
     consul_cluster[0].agent.maintenance(True)
@@ -197,7 +197,7 @@ def test_post_reboot_fails_with_other_node_in_maintenance(
     # Redo config since "our hostname" has changed.
     hostname = socket.gethostname()
     key = "service/rebootmgr/nodes/%s/config" % hostname
-    consul_cluster[0].kv.put(key, '{"disabled": false}')
+    consul_cluster[0].kv.put(key, '{"enabled": true}')
 
     consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", hostname)
     consul_cluster[1].agent.maintenance(True)
