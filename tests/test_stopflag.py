@@ -62,5 +62,5 @@ def test_set_local_stop_flag(
         hostname))
     assert idx is not None
     config = json.loads(data["Value"].decode())
-    assert config['disabled'] is True
+    assert config['enabled'] is False
     assert result.exit_code == 0

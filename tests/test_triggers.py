@@ -125,7 +125,7 @@ def test_reboot_on_not_a_holiday(
 def test_reboot_when_node_disabled(
         run_cli, forward_consul_port, consul_cluster, reboot_task,
         mock_subprocess_run, mocker):
-    consul_cluster[0].kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"disabled": true}')
+    consul_cluster[0].kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"enabled": false}')
 
     mocker.patch("time.sleep")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
@@ -140,7 +140,7 @@ def test_reboot_when_node_disabled(
 def test_reboot_when_node_disabled_but_ignored(
         run_cli, forward_consul_port, consul_cluster, reboot_task,
         mock_subprocess_run, mocker):
-    consul_cluster[0].kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"disabled": true}')
+    consul_cluster[0].kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"enabled": false}')
 
     mocked_sleep = mocker.patch("time.sleep")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
@@ -161,7 +161,7 @@ def test_reboot_when_node_disabled_after_sleep(
         reboot_task, mock_subprocess_run, mocker):
     def set_configuration_disabled(seconds):
         if seconds == 130:
-            consul_cluster[0].kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"disabled": true}')
+            consul_cluster[0].kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"enabled": false}')
 
     # When rebootmgr sleeps for 2 minutes, the stop flag will be set.
     mocked_sleep = mocker.patch("time.sleep", side_effect=set_configuration_disabled)
