@@ -1,21 +1,10 @@
 import socket
 
-from rebootmgr.main import cli as rebootmgr
 from unittest.mock import mock_open
 
-# exit codes < 100 are transient
-EXIT_CONSUL_CHECKS_FAILED = 2
-EXIT_CONSUL_NODE_FAILED = 3
-EXIT_CONSUL_LOCK_FAILED = 4
-EXIT_CONSUL_LOST_LOCK = 5
-EXIT_HOLIDAY = 6
-
-# exit codes >= 100 are permanent
-EXIT_TASK_FAILED = 100
-EXIT_NODE_DISABLED = 101
-EXIT_GLOBAL_STOP_FLAG_SET = 102
-EXIT_DID_NOT_REALLY_REBOOT = 103
-EXIT_CONFIGURATION_IS_MISSING = 104
+from rebootmgr.main import cli as rebootmgr
+from rebootmgr.main import EXIT_CONSUL_CHECKS_FAILED, EXIT_CONSUL_LOCK_FAILED, \
+    EXIT_DID_NOT_REALLY_REBOOT, EXIT_CONFIGURATION_IS_MISSING
 
 
 def test_reboot_fails_without_config(run_cli, forward_consul_port):
