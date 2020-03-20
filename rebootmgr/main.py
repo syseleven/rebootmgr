@@ -97,7 +97,7 @@ def get_whitelist(con) -> List[str]:
     return []
 
 
-def check_consul_services(con, ignore_failed_checks: bool):
+def check_consul_services(con, hostname, ignore_failed_checks: bool):
     """
     check all consul services for this node with the tag "rebootmgr"
     """
@@ -108,16 +108,26 @@ def check_consul_services(con, ignore_failed_checks: bool):
                     "because service/rebootmgr/ignore_failed_checks is set: {}".format(", ".join(whitelist)))
 
     local_checks = get_local_checks(con, tags=["rebootmgr"])
-    LOG.debug("relevant_checks: %s" % local_checks)
+    LOG.debug("local_checks: %s" % local_checks)
 
     if ignore_failed_checks:
         LOG.warning("All consul service checks are ignored.")
     else:
-        for name, check in get_failed_cluster_checks(con, local_checks).items():
-            if check["Node"] in whitelist:
-                continue
+        failed_cluster_checks = get_failed_cluster_checks(con, local_checks).items()
+        failed_names = []
 
-            LOG.error("There were failed consul checks. Exit.")
+        LOG.debug("failed_cluster_checks: %s" % failed_cluster_checks)
+        for name, check in failed_cluster_checks:
+            if check["Node"] not in whitelist:
+                # If the check is failing because the node is us and it is the
+                # is-in-maintenance-mode check, ignore it.
+                if name == '_node_maintenance' and check["Node"] == hostname:
+                    pass
+                else:
+                    failed_names.append(name + " on " + check["Node"])
+
+        if failed_names:
+            LOG.error("There were failed consul checks (%s). Exit.", failed_names)
             sys.exit(EXIT_CONSUL_CHECKS_FAILED)
 
         LOG.info("All consul checks passed.")
@@ -198,12 +208,13 @@ def post_reboot_state(con, consul_lock, hostname, flags):
         sys.exit(EXIT_DID_NOT_REALLY_REBOOT)
 
     LOG.info("Entering post reboot state")
+
+    check_consul_services(con, hostname, flags.get("ignore_failed_checks"))
+    run_tasks("post_boot", con, hostname, flags.get("dryrun"))
+    check_consul_services(con, hostname, flags.get("ignore_failed_checks"))
+
     # Disable consul (and Zabbix) maintenance
     con.agent.maintenance(False)
-
-    check_consul_services(con, flags.get("ignore_failed_checks"))
-    run_tasks("post_boot", con, hostname, flags.get("dryrun"))
-    check_consul_services(con, flags.get("ignore_failed_checks"))
 
     LOG.info("Remove consul key service/rebootmgr/nodes/%s/reboot_required" % hostname)
     con.kv.delete("service/rebootmgr/nodes/%s/reboot_required" % hostname)
@@ -232,7 +243,7 @@ def pre_reboot_state(con, consul_lock, hostname, flags):
 
     LOG.info("Entering pre reboot state")
 
-    check_consul_services(con, flags.get("ignore_failed_checks"))
+    check_consul_services(con, hostname, flags.get("ignore_failed_checks"))
 
     LOG.info("Executing pre reboot tasks")
     run_tasks("pre_boot", con, hostname, flags.get("dryrun"))
@@ -242,7 +253,7 @@ def pre_reboot_state(con, consul_lock, hostname, flags):
         time.sleep((60 * 2) + 10)
 
     check_consul_cluster(con, flags.get("ignore_failed_checks"))
-    check_consul_services(con, flags.get("ignore_failed_checks"))
+    check_consul_services(con, hostname, flags.get("ignore_failed_checks"))
 
     if not consul_lock.acquired:
         LOG.error("Lost consul lock. Exit")

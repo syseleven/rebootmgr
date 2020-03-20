@@ -132,6 +132,10 @@ def default_config(consul_cluster):
     key = "service/rebootmgr/nodes/%s/config" % hostname
     consul_cluster[0].kv.put(key, '{"enabled": true}')
 
+    yield
+
+    consul_cluster[0].kv.delete("service/rebootmgr", recurse=True)
+
 
 @pytest.fixture
 def forward_consul_port(forward_port, consul_cluster):

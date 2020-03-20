@@ -1,7 +1,10 @@
 import socket
 
-from rebootmgr.main import cli as rebootmgr
 from unittest.mock import mock_open
+
+from rebootmgr.main import cli as rebootmgr
+from rebootmgr.main import EXIT_CONSUL_CHECKS_FAILED, EXIT_CONSUL_LOCK_FAILED, \
+    EXIT_DID_NOT_REALLY_REBOOT, EXIT_CONFIGURATION_IS_MISSING
 
 
 def test_reboot_fails_without_config(run_cli, forward_consul_port):
@@ -9,7 +12,7 @@ def test_reboot_fails_without_config(run_cli, forward_consul_port):
 
     assert "Configuration data missing" in result.output
     assert "Executing pre reboot tasks" not in result.output
-    assert result.exit_code == 104
+    assert result.exit_code == EXIT_CONFIGURATION_IS_MISSING
 
 
 def test_reboot_fails_without_tasks(run_cli, forward_consul_port, default_config):
@@ -20,9 +23,9 @@ def test_reboot_fails_without_tasks(run_cli, forward_consul_port, default_config
     assert isinstance(result.exception, FileNotFoundError)
 
 
-def test_reboot_success_with_tasks(run_cli, forward_consul_port, consul_cluster,
-                                   default_config, reboot_task,
-                                   mock_subprocess_run, mocker):
+def test_reboot_succeeds_with_tasks(run_cli, forward_consul_port, consul_cluster,
+                                    default_config, reboot_task,
+                                    mock_subprocess_run, mocker):
     mocked_sleep = mocker.patch("time.sleep")
     reboot_task("pre_boot", "00_some_task.sh")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
@@ -43,10 +46,10 @@ def test_reboot_success_with_tasks(run_cli, forward_consul_port, consul_cluster,
     assert data["Value"].decode() == socket.gethostname()
 
 
-def test_dryrun_reboot_success_with_tasks(run_cli, forward_consul_port,
-                                          consul_cluster, default_config,
-                                          reboot_task, mock_subprocess_run,
-                                          mocker):
+def test_dryrun_reboot_succeeds_with_tasks(run_cli, forward_consul_port,
+                                           consul_cluster, default_config,
+                                           reboot_task, mock_subprocess_run,
+                                           mocker):
     mocked_sleep = mocker.patch("time.sleep")
     reboot_task("pre_boot", "00_some_task.sh")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
@@ -98,7 +101,7 @@ def test_reboot_fails_if_another_reboot_is_in_progress(run_cli, forward_consul_p
     result = run_cli(rebootmgr, ["-v"])
 
     assert "some_hostname" in result.output
-    assert result.exit_code == 4
+    assert result.exit_code == EXIT_CONSUL_LOCK_FAILED
 
 
 def test_post_reboot_phase_fails_without_tasks(run_cli, forward_consul_port, default_config, consul_cluster):
@@ -111,7 +114,7 @@ def test_post_reboot_phase_fails_without_tasks(run_cli, forward_consul_port, def
     assert isinstance(result.exception, FileNotFoundError)
 
 
-def test_post_reboot_phase_success_with_tasks(run_cli, forward_consul_port, default_config, consul_cluster, reboot_task):
+def test_post_reboot_phase_succeeds_with_tasks(run_cli, forward_consul_port, default_config, consul_cluster, reboot_task):
     reboot_task("post_boot", "50_another_task.sh")
 
     consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", socket.gethostname())
@@ -122,9 +125,9 @@ def test_post_reboot_phase_success_with_tasks(run_cli, forward_consul_port, defa
     assert "50_another_task.sh" in result.output
 
 
-def test_post_reboot_phase_failure_with_uptime(run_cli, forward_consul_port,
-                                               default_config, consul_cluster,
-                                               reboot_task, mocker):
+def test_post_reboot_phase_fails_with_uptime(run_cli, forward_consul_port,
+                                             default_config, consul_cluster,
+                                             reboot_task, mocker):
     mocker.patch('rebootmgr.main.open', new=mock_open(read_data='99999999.9 99999999.9'))
     reboot_task("post_boot", "50_another_task.sh")
 
@@ -133,4 +136,95 @@ def test_post_reboot_phase_failure_with_uptime(run_cli, forward_consul_port,
     result = run_cli(rebootmgr, ["-v", "--check-uptime"])
 
     assert "We are in post reboot state but uptime is higher then 2 hours." in result.output
-    assert result.exit_code == 103
+    assert result.exit_code == EXIT_DID_NOT_REALLY_REBOOT
+
+
+def test_post_reboot_succeeds_with_current_node_in_maintenance(
+        run_cli, consul_cluster, forward_consul_port, default_config,
+        reboot_task, mocker):
+    consul_cluster[0].agent.service.register("A", tags=["rebootmgr"])
+    consul_cluster[1].agent.service.register("A", tags=["rebootmgr"])
+    consul_cluster[2].agent.service.register("A", tags=["rebootmgr"])
+
+    consul_0_hostname = "consul1"
+
+    # Pretend we are the same host as consul_cluster[0]
+    def fake_gethostname():
+        return consul_0_hostname
+    mocker.patch('socket.gethostname', new=fake_gethostname)
+
+    # Redo config since "our hostname" has changed.
+    hostname = socket.gethostname()
+    key = "service/rebootmgr/nodes/%s/config" % hostname
+    consul_cluster[0].kv.put(key, '{"enabled": true}')
+
+    consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", hostname)
+    consul_cluster[0].agent.maintenance(True)
+
+    result = run_cli(rebootmgr, ["-v"])
+
+    assert "All consul checks passed." in result.output
+    assert "Remove consul key service/rebootmgr/reboot_in_progress" in result.output
+
+    assert result.exit_code == 0
+
+
+def test_post_reboot_fails_with_other_node_in_maintenance(
+        run_cli, consul_cluster, forward_consul_port, default_config,
+        reboot_task, mocker):
+    consul_cluster[0].agent.service.register("A", tags=["rebootmgr"])
+    consul_cluster[1].agent.service.register("A", tags=["rebootmgr"])
+    consul_cluster[2].agent.service.register("A", tags=["rebootmgr"])
+
+    consul_0_hostname = "consul1"
+
+    # Pretend we are the same host as consul_cluster[0]
+    def fake_gethostname():
+        return consul_0_hostname
+    mocker.patch('socket.gethostname', new=fake_gethostname)
+
+    # Redo config since "our hostname" has changed.
+    hostname = socket.gethostname()
+    key = "service/rebootmgr/nodes/%s/config" % hostname
+    consul_cluster[0].kv.put(key, '{"enabled": true}')
+
+    consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", hostname)
+    consul_cluster[1].agent.maintenance(True)
+
+    result = run_cli(rebootmgr, ["-v"])
+
+    assert 'There were failed consul checks' in result.output
+    assert '_node_maintenance on consul2' in result.output
+
+    assert result.exit_code == EXIT_CONSUL_CHECKS_FAILED
+
+
+def test_post_reboot_succeeds_with_other_node_in_maintenance_but_ignoring(
+        run_cli, consul_cluster, forward_consul_port, default_config,
+        reboot_task, mocker):
+
+    consul_cluster[0].agent.service.register("A", tags=["rebootmgr"])
+    consul_cluster[1].agent.service.register("A", tags=["rebootmgr", "ignore_maintenance"])
+    consul_cluster[2].agent.service.register("A", tags=["rebootmgr"])
+
+    consul_0_hostname = "consul1"
+
+    # Pretend we are the same host as consul_cluster[0]
+    def fake_gethostname():
+        return consul_0_hostname
+    mocker.patch('socket.gethostname', new=fake_gethostname)
+
+    # Redo config since "our hostname" has changed.
+    hostname = socket.gethostname()
+    key = "service/rebootmgr/nodes/%s/config" % hostname
+    consul_cluster[0].kv.put(key, '{"disabled": false}')
+
+    consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", hostname)
+    consul_cluster[1].agent.maintenance(True)
+
+    result = run_cli(rebootmgr, ["-v"])
+
+    assert "All consul checks passed." in result.output
+    assert "Remove consul key service/rebootmgr/reboot_in_progress" in result.output
+
+    assert result.exit_code == 0

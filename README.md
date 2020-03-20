@@ -30,6 +30,7 @@ For running the integration tests you need docker compose. For running the linte
 
 ```
 # Run integration tests with different python versions
+$ docker-compose run --rm integration_tests_py38
 $ docker-compose run --rm integration_tests_py37
 $ docker-compose run --rm integration_tests_py36
 $ docker-compose run --rm integration_tests_py35
