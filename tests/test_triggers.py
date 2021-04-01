@@ -154,6 +154,7 @@ def test_reboot_when_node_disabled_but_ignored(
 
 # TODO(oseibert): Should a MISSING configuration also be ignored with --ignore-node-disabled?
 
+
 # TODO(oseibert): Fix this bug.
 @pytest.mark.xfail
 def test_reboot_when_node_disabled_after_sleep(
