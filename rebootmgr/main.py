@@ -134,8 +134,8 @@ def check_consul_services(con, hostname, ignore_failed_checks: bool, wait_until_
             else:
                 LOG.error("There were failed consul checks (%s). Exit.", failed_names)
                 sys.exit(EXIT_CONSUL_CHECKS_FAILED)
-
-        LOG.info("All consul checks passed.")
+        else:
+            LOG.info("All consul checks passed.")
 
 
 @retry(wait_fixed=2000, stop_max_delay=20000)
