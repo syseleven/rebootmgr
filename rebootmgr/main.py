@@ -97,7 +97,7 @@ def get_whitelist(con) -> List[str]:
     return []
 
 
-def check_consul_services(con, hostname, ignore_failed_checks: bool, tags: List[str]):
+def check_consul_services(con, hostname, ignore_failed_checks: bool, tags: List[str], wait_until_healthy=False):
     """
     check all consul services for this node with the tag "rebootmgr"
     """
@@ -127,10 +127,15 @@ def check_consul_services(con, hostname, ignore_failed_checks: bool, tags: List[
                     failed_names.append(name + " on " + check["Node"])
 
         if failed_names:
-            LOG.error("There were failed consul checks (%s). Exit.", failed_names)
-            sys.exit(EXIT_CONSUL_CHECKS_FAILED)
-
-        LOG.info("All consul checks passed.")
+            if wait_until_healthy:
+                LOG.error("There were failed consul checks (%s). Trying again in 2 minutes.", failed_names)
+                time.sleep(120)
+                check_consul_services(con, hostname, ignore_failed_checks, wait_until_healthy)
+            else:
+                LOG.error("There were failed consul checks (%s). Exit.", failed_names)
+                sys.exit(EXIT_CONSUL_CHECKS_FAILED)
+        else:
+            LOG.info("All consul checks passed.")
 
 
 @retry(wait_fixed=2000, stop_max_delay=20000)
@@ -199,7 +204,7 @@ def is_node_disabled(con, hostname) -> bool:
     return not data.get('enabled', False)
 
 
-def post_reboot_state(con, consul_lock, hostname, flags):
+def post_reboot_state(con, consul_lock, hostname, flags, wait_until_healthy):
     LOG.info("Found my hostname in service/rebootmgr/reboot_in_progress")
 
     # Uptime greater 2 hours
@@ -209,9 +214,9 @@ def post_reboot_state(con, consul_lock, hostname, flags):
 
     LOG.info("Entering post reboot state")
 
-    check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_postboot"])
+    check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_postboot"], wait_until_healthy)
     run_tasks("post_boot", con, hostname, flags.get("dryrun"))
-    check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_postboot"])
+    check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_postboot"], wait_until_healthy)
 
     # Disable consul (and Zabbix) maintenance
     con.agent.maintenance(False)
@@ -368,6 +373,7 @@ def do_set_local_stop_flag(con, hostname):
 @click.option("-u", "--check-uptime", help="Make sure, that the uptime is less than 2 hours.", is_flag=True)
 @click.option("-s", "--ignore-global-stop-flag", help="ignore the global stop flag (service/rebootmgr/stop).", is_flag=True)
 @click.option("--check-holidays", help="Don't reboot on holidays", is_flag=True)
+@click.option("--post-reboot-wait-until-healthy", help="Wait until healthy in post reboot, instead of exit", is_flag=True)
 @click.option("--lazy-consul-checks", help="Don't repeat consul checks after two minutes", is_flag=True)
 @click.option("-l", "--ignore-node-disabled", help="ignore the node specific stop flag (service/rebootmgr/hostname/config)", is_flag=True)
 @click.option("--ignore-failed-checks", help="Reboot even if consul checks fail", is_flag=True)
@@ -383,8 +389,8 @@ def do_set_local_stop_flag(con, hostname):
 @click.option("--set-local-stop-flag", help="Stop the rebootmgr on this node", is_flag=True)
 @click.version_option()
 def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, maintenance_reason, ignore_global_stop_flag,
-        ignore_node_disabled, ignore_failed_checks, check_holidays, lazy_consul_checks, ensure_config,
-        set_global_stop_flag, set_local_stop_flag):
+        ignore_node_disabled, ignore_failed_checks, check_holidays, post_reboot_wait_until_healthy, lazy_consul_checks,
+        ensure_config, set_global_stop_flag, set_local_stop_flag):
     """Reboot Manager
 
     Default values of parameteres are environment variables (if set)
@@ -439,7 +445,7 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
         if reboot_in_progress:
             if reboot_in_progress.startswith(hostname):
                 # We are in post_reboot state
-                post_reboot_state(con, consul_lock, hostname, flags)
+                post_reboot_state(con, consul_lock, hostname, flags, post_reboot_wait_until_healthy)
                 sys.exit(0)
             # Another node has the lock
             else:
