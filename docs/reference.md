@@ -63,7 +63,8 @@ For an overview of how to register services and checks in consul, please refer t
 ### Relevant services
 
 - If service X is registered to the agent that is being rebooted, health of all instances of service X in the whole cluster (also on other nodes) are taken into consideration.
-- Only services with the tag `rebootmgr` will be taken into consideration.
+- Only services with the tags`rebootmgr`, `rebootmgr_postboot` and `rebootmgr_preboot` will be taken into consideration.
+- Services tagged with `rebootmgr` are considered before and after the reboot, `rebootmgr_preboot` only before  and `rebootmgr_postboot` only after a reboot.
 - Rebootmgr will consider services with consul maintenance mode enabled as broken, unless the service is tagged with `ignore_maintenance`
 - Rebootmgr assumes that `check_interval + check_timeout < 2 minutes`
 
