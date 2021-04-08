@@ -130,7 +130,7 @@ def check_consul_services(con, hostname, ignore_failed_checks: bool, tags: List[
             if wait_until_healthy:
                 LOG.error("There were failed consul checks (%s). Trying again in 2 minutes.", failed_names)
                 time.sleep(120)
-                check_consul_services(con, hostname, ignore_failed_checks, wait_until_healthy)
+                check_consul_services(con, hostname, ignore_failed_checks, tags, wait_until_healthy)
             else:
                 LOG.error("There were failed consul checks (%s). Exit.", failed_names)
                 sys.exit(EXIT_CONSUL_CHECKS_FAILED)
