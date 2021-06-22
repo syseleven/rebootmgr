@@ -1,0 +1,23 @@
+name: Code and Syntax tests
+on:
+  - push
+jobs:
+  Syntax-Lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install python prerequisites
+        run: "sudo pip3 install tox"
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Perform syntax lint
+        run: "cd ${{ github.workspace }} && tox -e lint"
+  Safety-Checks:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Install python prerequisites
+        run: "sudo pip3 install tox"
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Perform safety checks
+        run: "cd ${{ github.workspace }} && tox -e safety"

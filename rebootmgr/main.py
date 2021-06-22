@@ -380,7 +380,7 @@ def do_set_local_stop_flag(con, hostname):
 @click.option("--maintenance-reason", help="""Reason for the downtime in consul. If the text starts with "reboot", """ +
               "a 15 minute maintenance period is scheduled in zabbix\nDefault: reboot by rebootmgr",
               default="reboot by rebootmgr")
-@click.option("--consul", metavar="CONSUL_IP_ADDR" , help="Address of Consul. Default env REBOOTMGR_CONSUL_ADDR or 127.0.0.1.",
+@click.option("--consul", metavar="CONSUL_IP_ADDR", help="Address of Consul. Default env REBOOTMGR_CONSUL_ADDR or 127.0.0.1.",
               default=os.environ.get("REBOOTMGR_CONSUL_ADDR", "127.0.0.1"))
 @click.option("--consul-port", help="Port of Consul. Default env REBOOTMGR_CONSUL_PORT or 8500",
               default=os.environ.get("REBOOTMGR_CONSUL_PORT", 8500))
