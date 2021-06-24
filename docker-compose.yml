@@ -66,16 +66,16 @@ services:
     command:
       ["tox", "-e", "lint"]
   consul1:
-    image: consul:1.6.0
+    image: consul:1.10.0
     ports:
       - 8500:8500
     command: 'agent -client=0.0.0.0 -datacenter=test -server -bootstrap -node=consul1 -ui'
   consul2:
-    image: consul:1.6.0
+    image: consul:1.10.0
     command: 'agent -client=0.0.0.0 -datacenter=test -retry-join consul1 -retry-interval 1s -node=consul2'
   consul3:
-    image: consul:1.6.0
+    image: consul:1.10.0
     command: 'agent -client=0.0.0.0 -datacenter=test -retry-join consul1 -retry-interval 1s -node=consul3'
   consul4:
-    image: consul:1.6.0
+    image: consul:1.10.0
     command: 'agent -client=0.0.0.0 -datacenter=test -retry-join consul1 -retry-interval 1s -node=consul4'
