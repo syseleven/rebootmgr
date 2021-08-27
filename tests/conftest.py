@@ -25,6 +25,7 @@ def consul_cluster():
     try:
         yield clients
     finally:
+        # Consul cluster state includes the KV store.
         resp = requests.put(snapshot_url, data=snapshot.content)
         resp.raise_for_status()
         for c in clients:
