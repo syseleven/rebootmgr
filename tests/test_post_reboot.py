@@ -1,6 +1,5 @@
 import pytest
 import socket
-import threading
 import time
 
 from consul import Check
@@ -10,6 +9,7 @@ from rebootmgr.main import EXIT_CONSUL_CHECKS_FAILED, \
 from unittest.mock import mock_open
 
 WAIT_UNTIL_HEALTHY_SLEEP_TIME = 120
+
 
 @pytest.fixture
 def reboot_in_progress(consul_cluster):
