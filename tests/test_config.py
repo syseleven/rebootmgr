@@ -35,7 +35,9 @@ def test_ensure_config_when_old_style_config_present(
 def test_ensure_config_when_invalid(run_cli, forward_consul_port,
                                     consul_cluster, bad_config):
     hostname = socket.gethostname()
-    if bad_config is not None:
+    if bad_config is None:
+        consul_cluster[0].kv.delete("service/rebootmgr/nodes/%s/config" % hostname)
+    else:
         consul_cluster[0].kv.put("service/rebootmgr/nodes/%s/config" % hostname, bad_config)
 
     result = run_cli(rebootmgr, ["-v", "--ensure-config"])

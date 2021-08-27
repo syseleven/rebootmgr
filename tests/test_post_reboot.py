@@ -9,6 +9,7 @@ from rebootmgr.main import EXIT_CONSUL_CHECKS_FAILED, \
     EXIT_DID_NOT_REALLY_REBOOT
 from unittest.mock import mock_open
 
+WAIT_UNTIL_HEALTHY_SLEEP_TIME = 120
 
 @pytest.fixture
 def reboot_in_progress(consul_cluster):
@@ -95,12 +96,12 @@ def test_post_reboot_wait_until_healthy(
         We ignore sleep requests for different amounts of time.
         """
         nonlocal sleep_counter
-        if seconds == 120:  # the time to sleep, waiting for consul checks
+        if seconds == WAIT_UNTIL_HEALTHY_SLEEP_TIME:
             sleep_counter -= 1
             if sleep_counter <= 0:
                 consul_cluster[1].agent.check.ttl_pass("service:A")
 
-    mocker.patch("time.sleep", side_effect=fake_sleep)
+    mocker.patch("time.sleep", new=fake_sleep)
     mocked_run = mocker.patch("subprocess.run")
 
     result = run_cli(rebootmgr, ["-v", "--post-reboot-wait-until-healthy"])
@@ -149,19 +150,6 @@ def test_post_reboot_succeeds_with_current_node_in_maintenance(
     consul_cluster[1].agent.service.register("A", tags=["rebootmgr"])
     consul_cluster[2].agent.service.register("A", tags=["rebootmgr"])
 
-    consul_0_hostname = "consul1"
-
-    # Pretend we are the same host as consul_cluster[0]
-    def fake_gethostname():
-        return consul_0_hostname
-    mocker.patch('socket.gethostname', new=fake_gethostname)
-
-    # Redo config since "our hostname" has changed.
-    hostname = socket.gethostname()
-    key = "service/rebootmgr/nodes/%s/config" % hostname
-    consul_cluster[0].kv.put(key, '{"enabled": true}')
-
-    consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", hostname)
     consul_cluster[0].agent.maintenance(True)
 
     result = run_cli(rebootmgr, ["-v"])
@@ -179,19 +167,6 @@ def test_post_reboot_fails_with_other_node_in_maintenance(
     consul_cluster[1].agent.service.register("A", tags=["rebootmgr"])
     consul_cluster[2].agent.service.register("A", tags=["rebootmgr"])
 
-    consul_0_hostname = "consul1"
-
-    # Pretend we are the same host as consul_cluster[0]
-    def fake_gethostname():
-        return consul_0_hostname
-    mocker.patch('socket.gethostname', new=fake_gethostname)
-
-    # Redo config since "our hostname" has changed.
-    hostname = socket.gethostname()
-    key = "service/rebootmgr/nodes/%s/config" % hostname
-    consul_cluster[0].kv.put(key, '{"enabled": true}')
-
-    consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", hostname)
     consul_cluster[1].agent.maintenance(True)
 
     result = run_cli(rebootmgr, ["-v"])
@@ -210,19 +185,6 @@ def test_post_reboot_succeeds_with_other_node_in_maintenance_but_ignoring(
     consul_cluster[1].agent.service.register("A", tags=["rebootmgr", "ignore_maintenance"])
     consul_cluster[2].agent.service.register("A", tags=["rebootmgr"])
 
-    consul_0_hostname = "consul1"
-
-    # Pretend we are the same host as consul_cluster[0]
-    def fake_gethostname():
-        return consul_0_hostname
-    mocker.patch('socket.gethostname', new=fake_gethostname)
-
-    # Redo config since "our hostname" has changed.
-    hostname = socket.gethostname()
-    key = "service/rebootmgr/nodes/%s/config" % hostname
-    consul_cluster[0].kv.put(key, '{"disabled": false}')
-
-    consul_cluster[0].kv.put("service/rebootmgr/reboot_in_progress", hostname)
     consul_cluster[1].agent.maintenance(True)
 
     result = run_cli(rebootmgr, ["-v"])
@@ -230,4 +192,48 @@ def test_post_reboot_succeeds_with_other_node_in_maintenance_but_ignoring(
     assert "All consul checks passed." in result.output
     assert "Remove consul key service/rebootmgr/reboot_in_progress" in result.output
 
+    assert result.exit_code == 0
+
+
+def test_post_reboot_wait_until_healthy_with_maintenance(
+        run_cli, consul_cluster, forward_consul_port, default_config,
+        reboot_in_progress, reboot_task, mocker):
+    """
+    Test if we wait until consul checks are passing after reboot.
+    Since none of these services have the tag "ignore_maintenance", they count
+    as broken when their node is in maintenance mode.
+    """
+    consul_cluster[0].agent.service.register("A", tags=["rebootmgr"])
+    consul_cluster[1].agent.service.register("A", tags=["rebootmgr"])
+    consul_cluster[2].agent.service.register("A", tags=["rebootmgr"])
+
+    consul_cluster[1].agent.maintenance(True)
+
+    sleep_counter = 2
+
+    def fake_sleep(seconds):
+        """
+        While we're waiting for consul checks to start passing,
+        we sleep 120 seconds at a time.
+        Count how often this happens, and after a few times, we
+        will remove the maintenance.
+
+        We ignore sleep requests for different amounts of time.
+        """
+        nonlocal sleep_counter
+        if seconds == WAIT_UNTIL_HEALTHY_SLEEP_TIME:
+            sleep_counter -= 1
+            if sleep_counter <= 0:
+                consul_cluster[1].agent.maintenance(False)
+
+    mocker.patch("time.sleep", new=fake_sleep)
+    mocked_run = mocker.patch("subprocess.run")
+
+    result = run_cli(rebootmgr, ["-v", "--post-reboot-wait-until-healthy"])
+
+    mocked_run.assert_not_called()
+    assert sleep_counter == 0
+    assert 'There were failed consul checks' in result.output
+    assert '_node_maintenance on consul2' in result.output
+    assert "All consul checks passed." in result.output
     assert result.exit_code == 0
