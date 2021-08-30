@@ -12,7 +12,7 @@ import consul
 
 
 @pytest.fixture
-def consul_cluster():
+def consul_cluster(mocker):
     clients = [consul.Consul(host="consul{}".format(i + 1)) for i in range(4)]
 
     while not clients[0].status.leader():
@@ -22,9 +22,16 @@ def consul_cluster():
     snapshot = requests.get(snapshot_url)
     snapshot.raise_for_status()
 
+    # Pretend we are the same host as clients[0]
+    def fake_gethostname():
+        return "consul1"
+
+    mocker.patch('socket.gethostname', new=fake_gethostname)
+
     try:
         yield clients
     finally:
+        # Consul cluster state includes the KV store.
         resp = requests.put(snapshot_url, data=snapshot.content)
         resp.raise_for_status()
         for c in clients:
