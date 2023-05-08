@@ -1,8 +1,15 @@
+rebootmgr (0.0.25-0+syseleven1) focal; urgency=medium
+
+  * Add option to skip the creation of the reboot_in_progress consul key
+
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Mo,8 May 2023 17:09:00 +0100
+
 rebootmgr (0.0.22-0+syseleven1) xenial; urgency=medium
 
   * Only allow reboots if per-host configuration is present
 
  -- Olaf Seibert <o.seibert@syseleven.de>  Tue,10 Dec 2019 17:09:00 +0100
+
 rebootmgr (0.0.21-0+syseleven1) xenial; urgency=medium
 
   * In dry-run pass env variable REBOOTMGR_DRY_RUN to tasks
