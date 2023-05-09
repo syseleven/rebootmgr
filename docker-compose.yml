@@ -1,16 +1,5 @@
 version: "3"
 services:
-  integration_tests_py35:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        PYTHON_VERSION: 3.5
-    volumes:
-      - .:/src
-    depends_on: [consul1, consul2, consul3, consul4]
-    command:
-      ["tox", "-e", "py35"]
   integration_tests_py36:
     build:
       context: .
