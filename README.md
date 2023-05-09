@@ -31,7 +31,6 @@ For running the integration tests you need docker compose. For running the linte
 $ docker-compose run --rm integration_tests_py38
 $ docker-compose run --rm integration_tests_py37
 $ docker-compose run --rm integration_tests_py36
-$ docker-compose run --rm integration_tests_py35
 
 # Run linter and safety checks
 $ tox -e lint
