@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python_version: [35, 36, 37, 38, 39]
+        python_version: [36, 37, 38, 39]
     steps:
       - name: Install python prerequisites
         run: "sudo pip3 install docker-compose"
