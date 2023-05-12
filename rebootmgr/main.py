@@ -272,11 +272,12 @@ def pre_reboot_state(con, consul_lock, hostname, flags):
     if flags.get("check_triggers") and not is_reboot_required(con, hostname):
         sys.exit(0)
 
-    if not flags.get("dryrun"):
-        LOG.debug("Write %s in key service/rebootmgr/reboot_in_progress" % hostname)
-        con.kv.put("service/rebootmgr/reboot_in_progress", hostname)
-    else:
-        LOG.debug("Would write %s in key service/rebootmgr/reboot_in_progress" % hostname)
+    if not flags.get("skip_reboot_in_progress_key"):
+        if not flags.get("dryrun"):
+            LOG.debug("Write %s in key service/rebootmgr/reboot_in_progress" % hostname)
+            con.kv.put("service/rebootmgr/reboot_in_progress", hostname)
+        else:
+            LOG.debug("Would write %s in key service/rebootmgr/reboot_in_progress" % hostname)
 
     consul_lock.release()
 
@@ -387,10 +388,11 @@ def do_set_local_stop_flag(con, hostname):
 @click.option("--ensure-config", help="If there is no valid configuration in consul, create a default one.", is_flag=True)
 @click.option("--set-global-stop-flag", metavar="CLUSTER", help="Stop the rebootmgr cluster-wide in the specified cluster")
 @click.option("--set-local-stop-flag", help="Stop the rebootmgr on this node", is_flag=True)
+@click.option("--skip-reboot-in-progress-key", help="Don't set the reboot_in_progress consul key before rebooting", is_flag=True)
 @click.version_option()
 def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, maintenance_reason, ignore_global_stop_flag,
         ignore_node_disabled, ignore_failed_checks, check_holidays, post_reboot_wait_until_healthy, lazy_consul_checks,
-        ensure_config, set_global_stop_flag, set_local_stop_flag):
+        ensure_config, set_global_stop_flag, set_local_stop_flag, skip_reboot_in_progress_key):
     """Reboot Manager
 
     Default values of parameteres are environment variables (if set)
@@ -430,7 +432,8 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
              "ignore_node_disabled": ignore_node_disabled,
              "ignore_failed_checks": ignore_failed_checks,
              "check_holidays": check_holidays,
-             "lazy_consul_checks": lazy_consul_checks}
+             "lazy_consul_checks": lazy_consul_checks,
+             "skip_reboot_in_progress_key": skip_reboot_in_progress_key}
 
     check_consul_cluster(con, ignore_failed_checks)
 
