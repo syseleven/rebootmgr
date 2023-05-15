@@ -54,7 +54,7 @@ def logsetup(verbosity):
     LOG.debug("Debug logging enabled")
 
 
-def run_tasks(tasktype, con, hostname, dryrun):
+def run_tasks(tasktype, con, hostname, dryrun, task_timeout):
     """
     run every script in /etc/rebootmgr/pre_boot_tasks or
     /etc/rebootmgr/post_boot_tasks
@@ -71,16 +71,16 @@ def run_tasks(tasktype, con, hostname, dryrun):
         task = os.path.join("/etc/rebootmgr/%s_tasks" % tasktype, task)
         LOG.info("Run task %s" % task)
         try:
-            subprocess.run(task, check=True, env=env, timeout=(2 * 60 * 60))
+            subprocess.run(task, check=True, env=env, timeout=(task_timeout * 60))
         except subprocess.CalledProcessError as e:
             LOG.error("Task %s failed with return code %s. Exit" % (task, e.returncode))
             sys.exit(EXIT_TASK_FAILED)
         except subprocess.TimeoutExpired:
-            LOG.error("Could not finish task %s in 2 hours. Exit" % task)
+            LOG.error("Could not finish task %s in %i minutes. Exit" % (task, task_timeout))
             LOG.error("Disable rebootmgr in consul for this node")
             data = get_config(con, hostname)
             data["enabled"] = False
-            data["message"] = "Could not finish task %s in 2 hours" % task
+            data["message"] = "Could not finish task %s in %i minutes" % (task, task_timeout)
             put_config(con, hostname, data)
             con.kv.delete("service/rebootmgr/reboot_in_progress")
             sys.exit(EXIT_TASK_FAILED)
@@ -204,7 +204,7 @@ def is_node_disabled(con, hostname) -> bool:
     return not data.get('enabled', False)
 
 
-def post_reboot_state(con, consul_lock, hostname, flags, wait_until_healthy):
+def post_reboot_state(con, consul_lock, hostname, flags, wait_until_healthy, task_timeout):
     LOG.info("Found my hostname in service/rebootmgr/reboot_in_progress")
 
     # Uptime greater 2 hours
@@ -215,7 +215,7 @@ def post_reboot_state(con, consul_lock, hostname, flags, wait_until_healthy):
     LOG.info("Entering post reboot state")
 
     check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_postboot"], wait_until_healthy)
-    run_tasks("post_boot", con, hostname, flags.get("dryrun"))
+    run_tasks("post_boot", con, hostname, flags.get("dryrun"), task_timeout)
     check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_postboot"], wait_until_healthy)
 
     # Disable consul (and Zabbix) maintenance
@@ -229,7 +229,7 @@ def post_reboot_state(con, consul_lock, hostname, flags, wait_until_healthy):
     consul_lock.release()
 
 
-def pre_reboot_state(con, consul_lock, hostname, flags):
+def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout):
     today = datetime.date.today()
     if flags.get("check_holidays") and today in holidays.DE():
         LOG.info("Refuse to run on holiday")
@@ -251,7 +251,7 @@ def pre_reboot_state(con, consul_lock, hostname, flags):
     check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_preboot"])
 
     LOG.info("Executing pre reboot tasks")
-    run_tasks("pre_boot", con, hostname, flags.get("dryrun"))
+    run_tasks("pre_boot", con, hostname, flags.get("dryrun"), task_timeout)
 
     if not flags.get("lazy_consul_checks"):
         LOG.info("Sleep for 2 minutes. Waiting for consul checks.")
@@ -389,10 +389,11 @@ def do_set_local_stop_flag(con, hostname):
 @click.option("--set-global-stop-flag", metavar="CLUSTER", help="Stop the rebootmgr cluster-wide in the specified cluster")
 @click.option("--set-local-stop-flag", help="Stop the rebootmgr on this node", is_flag=True)
 @click.option("--skip-reboot-in-progress-key", help="Don't set the reboot_in_progress consul key before rebooting", is_flag=True)
+@click.option("--task-timeout", help="Minutes that rebootmgr waits for each task to finish. Default are 120 minutes", default=120, type=int)
 @click.version_option()
 def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, maintenance_reason, ignore_global_stop_flag,
         ignore_node_disabled, ignore_failed_checks, check_holidays, post_reboot_wait_until_healthy, lazy_consul_checks,
-        ensure_config, set_global_stop_flag, set_local_stop_flag, skip_reboot_in_progress_key):
+        ensure_config, set_global_stop_flag, set_local_stop_flag, skip_reboot_in_progress_key, task_timeout):
     """Reboot Manager
 
     Default values of parameteres are environment variables (if set)
@@ -448,7 +449,7 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
         if reboot_in_progress:
             if reboot_in_progress.startswith(hostname):
                 # We are in post_reboot state
-                post_reboot_state(con, consul_lock, hostname, flags, post_reboot_wait_until_healthy)
+                post_reboot_state(con, consul_lock, hostname, flags, post_reboot_wait_until_healthy, task_timeout)
                 sys.exit(0)
             # Another node has the lock
             else:
@@ -458,7 +459,7 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
         # we are free to reboot
         else:
             # We are in pre_reboot state
-            pre_reboot_state(con, consul_lock, hostname, flags)
+            pre_reboot_state(con, consul_lock, hostname, flags, task_timeout)
 
             if not dryrun:
                 # Set a consul maintenance, which creates a 15 maintenance window in Zabbix

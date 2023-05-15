@@ -10,13 +10,13 @@ def test_reboot_task_timeout(run_cli, consul_cluster, forward_consul_port, defau
 
     result = run_cli(rebootmgr)
 
-    assert "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 2 hours" in result.output
+    assert "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 120 minutes" in result.output
     assert result.exit_code == 100
 
     _, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
     assert json.loads(data["Value"].decode()) == {
         "enabled": False,
-        "message": "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 2 hours"
+        "message": "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 120 minutes"
     }
     # TODO(oseibert): check that shutdown is NOT called.
 
@@ -44,14 +44,14 @@ def test_reboot_task_timeout_with_preexisting_config(run_cli, consul_cluster, fo
 
     result = run_cli(rebootmgr)
 
-    assert "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 2 hours" in result.output
+    assert "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 120 minutes" in result.output
     assert result.exit_code == 100
 
     _, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
     assert json.loads(data["Value"].decode()) == {
         "test_preserved": True,
         "enabled": False,
-        "message": "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 2 hours"
+        "message": "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 120 minutes"
     }
     # TODO(oseibert): check that shutdown is NOT called.
 
@@ -64,11 +64,11 @@ def test_post_reboot_phase_task_timeout(run_cli, consul_cluster, forward_consul_
 
     result = run_cli(rebootmgr)
 
-    assert "Could not finish task /etc/rebootmgr/post_boot_tasks/50_another_task.sh in 2 hours" in result.output
+    assert "Could not finish task /etc/rebootmgr/post_boot_tasks/50_another_task.sh in 120 minutes" in result.output
     assert result.exit_code == 100
 
     _, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
     assert json.loads(data["Value"].decode()) == {
         "enabled": False,
-        "message": "Could not finish task /etc/rebootmgr/post_boot_tasks/50_another_task.sh in 2 hours"
+        "message": "Could not finish task /etc/rebootmgr/post_boot_tasks/50_another_task.sh in 120 minutes"
     }
