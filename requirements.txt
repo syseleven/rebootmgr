@@ -1,7 +1,7 @@
 click==8.0.4
 colorlog==6.7.0
 python-consul==1.1.0
-requests==2.27.1
+requests==2.31.0
 urllib3==1.26.15
 retrying==1.3.4
 holidays==0.9.8
