@@ -193,7 +193,8 @@ def check_consul_cluster(con, ignore_failed_checks: bool) -> None:
         LOG.warning("All consul cluster checks are ignored.")
     else:
         for member in con.agent.members():
-            if "Status" in member.keys() and member["Status"] != 1 and member["Name"] not in whitelist:
+            # Consul member status 1 = Alive, 3 = Left
+            if "Status" in member.keys() and member["Status"] not in [1, 3] and member["Name"] not in whitelist:
                 LOG.error("Consul cluster not healthy: Node %s failed. Exit" % member["Name"])
                 sys.exit(EXIT_CONSUL_NODE_FAILED)
 
