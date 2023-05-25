@@ -77,11 +77,6 @@ def run_tasks(tasktype, con, hostname, dryrun, task_timeout):
             sys.exit(EXIT_TASK_FAILED)
         except subprocess.TimeoutExpired:
             LOG.error("Could not finish task %s in %i minutes. Exit" % (task, task_timeout))
-            LOG.error("Disable rebootmgr in consul for this node")
-            data = get_config(con, hostname)
-            data["enabled"] = False
-            data["message"] = "Could not finish task %s in %i minutes" % (task, task_timeout)
-            put_config(con, hostname, data)
             con.kv.delete("service/rebootmgr/reboot_in_progress")
             sys.exit(EXIT_TASK_FAILED)
         LOG.info("task %s finished" % task)
