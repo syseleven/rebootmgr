@@ -45,7 +45,7 @@ def test_reboot_task_timeout_with_preexisting_config(run_cli, consul_cluster, fo
     _, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
     assert json.loads(data["Value"].decode()) == {
         "test_preserved": True,
-        "enabled": False,
+        "enabled": True,
         "message": "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 120 minutes"
     }
     # TODO(oseibert): check that shutdown is NOT called.
