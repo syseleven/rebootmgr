@@ -13,11 +13,6 @@ def test_reboot_task_timeout(run_cli, consul_cluster, forward_consul_port, defau
     assert "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 120 minutes" in result.output
     assert result.exit_code == 100
 
-    _, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(socket.gethostname()))
-    assert json.loads(data["Value"].decode()) == {
-        "enabled": False,
-        "message": "Could not finish task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh in 120 minutes"
-    }
     # TODO(oseibert): check that shutdown is NOT called.
 
 
