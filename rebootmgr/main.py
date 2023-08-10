@@ -70,12 +70,15 @@ def run_tasks(tasktype, con, hostname, dryrun, task_timeout):
     for task in sorted(os.listdir("/etc/rebootmgr/%s_tasks/" % tasktype)):
         task = os.path.join("/etc/rebootmgr/%s_tasks" % tasktype, task)
         LOG.info("Run task %s" % task)
+        p = subprocess.Popen(task, env=env)
         try:
-            subprocess.run(task, check=True, env=env, timeout=(task_timeout * 60))
-        except subprocess.CalledProcessError as e:
-            LOG.error("Task %s failed with return code %s. Exit" % (task, e.returncode))
-            sys.exit(EXIT_TASK_FAILED)
+            ret = p.wait(timeout=(task_timeout * 60))
         except subprocess.TimeoutExpired:
+            p.terminate()
+            try:
+                p.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                p.kill()
             LOG.error("Could not finish task %s in %i minutes. Exit" % (task, task_timeout))
             LOG.error("Disable rebootmgr in consul for this node")
             data = get_config(con, hostname)
@@ -83,6 +86,9 @@ def run_tasks(tasktype, con, hostname, dryrun, task_timeout):
             data["message"] = "Could not finish task %s in %i minutes" % (task, task_timeout)
             put_config(con, hostname, data)
             con.kv.delete("service/rebootmgr/reboot_in_progress")
+            sys.exit(EXIT_TASK_FAILED)
+        if ret != 0:
+            LOG.error("Task %s failed with return code %s. Exit" % (task, ret))
             sys.exit(EXIT_TASK_FAILED)
         LOG.info("task %s finished" % task)
 
