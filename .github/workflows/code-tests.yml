@@ -8,7 +8,7 @@ jobs:
       - name: Install python prerequisites
         run: "sudo pip3 install tox"
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Perform syntax lint
         run: "cd ${{ github.workspace }} && tox -e lint"
   Safety-Checks:
@@ -18,6 +18,6 @@ jobs:
       - name: Install python prerequisites
         run: "sudo pip3 install tox"
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Perform safety checks
         run: "cd ${{ github.workspace }} && tox -e safety"
