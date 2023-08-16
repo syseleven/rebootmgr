@@ -19,7 +19,7 @@ def consul_cluster(mocker):
         time.sleep(.1)
 
     snapshot_url = 'http://consul1:8500/v1/snapshot'
-    snapshot = requests.get(snapshot_url)
+    snapshot = requests.get(snapshot_url, allow_redirects=False)
     snapshot.raise_for_status()
 
     # Pretend we are the same host as clients[0]
