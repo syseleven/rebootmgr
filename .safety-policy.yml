@@ -1,0 +1,5 @@
+security:
+    ignore-vulnerabilities:
+        58755:
+            reason: we implemented the recommended workaround
+            expires: '2024-07-01'
