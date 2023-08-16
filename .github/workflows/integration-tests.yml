@@ -12,6 +12,6 @@ jobs:
       - name: Install python prerequisites
         run: "sudo pip3 install docker-compose"
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Perform integration tests for python version ${{ matrix.python_version }}
         run: "cd ${{ github.workspace }} && docker-compose run --rm integration_tests_py${{ matrix.python_version }}"
