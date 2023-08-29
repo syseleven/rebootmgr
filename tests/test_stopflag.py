@@ -42,7 +42,52 @@ def test_set_global_stop_flag(
     assert "Set "+datacenter+" global stop flag:" in result.output
     idx, data = consul_cluster[0].kv.get("service/rebootmgr/stop", dc=datacenter)
     assert idx is not None
-    assert data != ""
+    assert data["Value"]
+    assert result.exit_code == 0
+
+
+def test_set_global_stop_flag_with_reason(
+        run_cli, forward_consul_port, consul_cluster,
+        mock_subprocess_run, mocker):
+    mocked_sleep = mocker.patch("time.sleep")
+    mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
+    datacenter = "test"
+
+    result = run_cli(rebootmgr, ["-v", "--set-global-stop-flag", datacenter,
+                                 "--stop-reason", "My reason"])
+
+    mocked_sleep.assert_not_called()
+    mocked_run.assert_not_called()
+    assert "Set "+datacenter+" global stop flag:" in result.output
+    idx, data = consul_cluster[0].kv.get("service/rebootmgr/stop", dc=datacenter)
+    assert idx is not None
+    assert "My reason" in data["Value"].decode()
+    assert result.exit_code == 0
+
+
+def test_unset_global_stop_flag(
+        run_cli, forward_consul_port, consul_cluster,
+        mock_subprocess_run, mocker):
+    mocked_sleep = mocker.patch("time.sleep")
+    mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
+    datacenter = "test"
+
+    result = run_cli(rebootmgr, ["-v", "--set-global-stop-flag", datacenter])
+
+    mocked_sleep.assert_not_called()
+    mocked_run.assert_not_called()
+    idx, data = consul_cluster[0].kv.get("service/rebootmgr/stop", dc=datacenter)
+    assert idx is not None
+    assert data
+    assert result.exit_code == 0
+
+    result = run_cli(rebootmgr, ["-v", "--unset-global-stop-flag", datacenter])
+    mocked_sleep.assert_not_called()
+    mocked_run.assert_not_called()
+    idx, data = consul_cluster[0].kv.get("service/rebootmgr/stop", dc=datacenter)
+    assert "Remove "+datacenter+" global stop flag" in result.output
+    assert idx is not None
+    assert data is None
     assert result.exit_code == 0
 
 
@@ -63,4 +108,56 @@ def test_set_local_stop_flag(
     assert idx is not None
     config = json.loads(data["Value"].decode())
     assert config['enabled'] is False
+    assert result.exit_code == 0
+
+
+def test_set_local_stop_flag_with_reason(
+        run_cli, forward_consul_port, consul_cluster,
+        mock_subprocess_run, mocker):
+    mocked_sleep = mocker.patch("time.sleep")
+    mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
+    hostname = socket.gethostname().split(".")[0]
+
+    result = run_cli(rebootmgr, ["-v", "--set-local-stop-flag",
+                                 "--stop-reason", "My reason"])
+
+    mocked_sleep.assert_not_called()
+    mocked_run.assert_not_called()
+    assert "Set "+hostname+" local stop flag:" in result.output
+    idx, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(
+        hostname))
+    assert idx is not None
+    config = json.loads(data["Value"].decode())
+    assert config['enabled'] is False
+    assert "My reason" in config["message"]
+    assert result.exit_code == 0
+
+
+def test_unset_local_stop_flag(
+        run_cli, forward_consul_port, consul_cluster,
+        mock_subprocess_run, mocker):
+    mocked_sleep = mocker.patch("time.sleep")
+    mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
+    hostname = socket.gethostname().split(".")[0]
+
+    result = run_cli(rebootmgr, ["-v", "--set-local-stop-flag"])
+
+    consul_key = "service/rebootmgr/nodes/{}/config".format(hostname)
+    mocked_sleep.assert_not_called()
+    mocked_run.assert_not_called()
+    idx, data = consul_cluster[0].kv.get(consul_key)
+    assert idx is not None
+    config = json.loads(data["Value"].decode())
+    assert config['enabled'] is False
+    assert result.exit_code == 0
+
+    result = run_cli(rebootmgr, ["-v", "--unset-local-stop-flag"])
+
+    mocked_sleep.assert_not_called()
+    mocked_run.assert_not_called()
+    assert "Unset "+hostname+" local stop flag" in result.output
+    idx, data = consul_cluster[0].kv.get(consul_key)
+    assert idx is not None
+    config = json.loads(data["Value"].decode())
+    assert config['enabled'] is True
     assert result.exit_code == 0
