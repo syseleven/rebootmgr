@@ -351,21 +351,38 @@ def getuser():
     return user or getpass.getuser()
 
 
-def do_set_global_stop_flag(con, dc):
-    reason = "Set by " + getuser()\
-             + " " + str(datetime.datetime.now())
-    con.kv.put("service/rebootmgr/stop", reason, dc=dc)
-    LOG.warning("Set %s global stop flag: %s", dc, reason)
+def do_set_global_stop_flag(con, dc, reason=None):
+    msg_parts = ["Set by", getuser(), str(datetime.datetime.now())]
+    if reason:
+        msg_parts.append(reason)
+    message = " ".join(msg_parts)
+    con.kv.put("service/rebootmgr/stop", message, dc=dc)
+    LOG.warning("Set %s global stop flag: %s", dc, message)
 
 
-def do_set_local_stop_flag(con, hostname):
-    reason = "Node disabled by " + getuser()\
-             + " " + str(datetime.datetime.now())
+def do_unset_global_stop_flag(con, dc):
+    con.kv.delete("service/rebootmgr/stop", dc=dc)
+    LOG.warning("Remove %s global stop flag", dc)
+
+
+def do_set_local_stop_flag(con, hostname, reason=None):
+    msg_parts = ["Node disabled by", getuser(), str(datetime.datetime.now())]
+    if reason:
+        msg_parts.append(reason)
+    message = " ".join(msg_parts)
     config = get_config(con, hostname)
     config["enabled"] = False
-    config["message"] = reason
+    config["message"] = message
     put_config(con, hostname, config)
-    LOG.warning("Set %s local stop flag: %s", hostname, reason)
+    LOG.warning("Set %s local stop flag: %s", hostname, message)
+
+
+def do_unset_local_stop_flag(con, hostname):
+    config = get_config(con, hostname)
+    config["enabled"] = True
+    config["message"] = ""
+    put_config(con, hostname, config)
+    LOG.warning("Unset %s local stop flag", hostname)
 
 
 @click.command()
@@ -388,13 +405,17 @@ def do_set_local_stop_flag(con, hostname):
               default=os.environ.get("REBOOTMGR_CONSUL_PORT", 8500))
 @click.option("--ensure-config", help="If there is no valid configuration in consul, create a default one.", is_flag=True)
 @click.option("--set-global-stop-flag", metavar="CLUSTER", help="Stop the rebootmgr cluster-wide in the specified cluster")
+@click.option("--unset-global-stop-flag", metavar="CLUSTER", help="Remove the cluster-wide stop flag in the specified cluster")
 @click.option("--set-local-stop-flag", help="Stop the rebootmgr on this node", is_flag=True)
+@click.option("--unset-local-stop-flag", help="Remove the stop flag on this node", is_flag=True)
+@click.option("--stop-reason", help="Reason to set the stop flag")
 @click.option("--skip-reboot-in-progress-key", help="Don't set the reboot_in_progress consul key before rebooting", is_flag=True)
 @click.option("--task-timeout", help="Minutes that rebootmgr waits for each task to finish. Default are 120 minutes", default=120, type=int)
 @click.version_option()
 def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, maintenance_reason, ignore_global_stop_flag,
         ignore_node_disabled, ignore_failed_checks, check_holidays, post_reboot_wait_until_healthy, lazy_consul_checks,
-        ensure_config, set_global_stop_flag, set_local_stop_flag, skip_reboot_in_progress_key, task_timeout):
+        ensure_config, set_global_stop_flag, unset_global_stop_flag, set_local_stop_flag, unset_local_stop_flag, stop_reason,
+        skip_reboot_in_progress_key, task_timeout):
     """Reboot Manager
 
     Default values of parameteres are environment variables (if set)
@@ -414,11 +435,19 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
         sys.exit(0)
 
     if set_global_stop_flag:
-        do_set_global_stop_flag(con, set_global_stop_flag)
+        do_set_global_stop_flag(con, set_global_stop_flag, reason=stop_reason)
+        sys.exit(0)
+
+    if unset_global_stop_flag:
+        do_unset_global_stop_flag(con, unset_global_stop_flag)
         sys.exit(0)
 
     if set_local_stop_flag:
-        do_set_local_stop_flag(con, hostname)
+        do_set_local_stop_flag(con, hostname, reason=stop_reason)
+        sys.exit(0)
+
+    if unset_local_stop_flag:
+        do_unset_local_stop_flag(con, hostname)
         sys.exit(0)
 
     if not config_is_present_and_valid(con, hostname):
