@@ -49,7 +49,7 @@ def test_dryrun_reboot_succeeds_with_tasks(run_cli, forward_consul_port,
                                            reboot_task, mock_subprocess_run,
                                            mocker):
     mocked_sleep = mocker.patch("time.sleep")
-    reboot_task("pre_boot", "00_some_task.sh")
+    mocked_popen = reboot_task("pre_boot", "00_some_task.sh")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
 
     result = run_cli(rebootmgr, ["-vv", "--dryrun"])
@@ -58,8 +58,11 @@ def test_dryrun_reboot_succeeds_with_tasks(run_cli, forward_consul_port,
     assert "in key service/rebootmgr/reboot_in_progress" in result.output
     assert result.exit_code == 0
 
-    assert mocked_run.call_count == 1
-    args, kwargs = mocked_run.call_args
+    # shutdown must not be called
+    mocked_run.assert_not_called()
+    # task should be called
+    assert mocked_popen.call_count == 1
+    args, kwargs = mocked_popen.call_args
     assert args[0] == "/etc/rebootmgr/pre_boot_tasks/00_some_task.sh"
     assert 'env' in kwargs
     assert 'REBOOTMGR_DRY_RUN' in kwargs['env']
@@ -80,6 +83,7 @@ def test_reboot_fail(
         mock_subprocess_run, mocker):
     mocked_sleep = mocker.patch("time.sleep")
 
+    mocked_popen = mocker.patch("subprocess.Popen")
     mocked_run = mock_subprocess_run(
         ["shutdown", "-r", "+1"],
         side_effect=Exception("Failed to run reboot command"))
@@ -88,6 +92,7 @@ def test_reboot_fail(
 
     assert result.exit_code == 1
 
+    mocked_popen.assert_not_called()
     mocked_run.assert_any_call(["shutdown", "-r", "+1"], check=True)
 
     # We want rebootmgr to sleep for 2 minutes after running the pre boot tasks,
@@ -112,10 +117,12 @@ def test_reboot_succeeds_if_this_node_is_in_maintenance(
     consul_cluster[0].agent.maintenance(True)
 
     mocker.patch("time.sleep")
+    mocked_popen = mocker.patch("subprocess.Popen")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
 
     result = run_cli(rebootmgr, ["-v"])
 
+    mocked_popen.assert_not_called()
     mocked_run.assert_any_call(["shutdown", "-r", "+1"], check=True)
     assert result.exit_code == 0
 
@@ -129,10 +136,12 @@ def test_reboot_fails_if_another_node_is_in_maintenance(
     consul_cluster[1].agent.maintenance(True)
 
     mocker.patch("time.sleep")
+    mocked_popen = mocker.patch("subprocess.Popen")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
 
     result = run_cli(rebootmgr, ["-v"])
 
+    mocked_popen.assert_not_called()
     mocked_run.assert_not_called()
     assert 'There were failed consul checks' in result.output
     assert '_node_maintenance on consul2' in result.output
@@ -149,9 +158,11 @@ def test_reboot_succeeds_if_another_node_is_in_maintenance_but_ignoring(
     consul_cluster[1].agent.maintenance(True)
 
     mocker.patch("time.sleep")
+    mocked_popen = mocker.patch("subprocess.Popen")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
 
     result = run_cli(rebootmgr, ["-v"])
 
+    mocked_popen.assert_not_called()
     mocked_run.assert_any_call(["shutdown", "-r", "+1"], check=True)
     assert result.exit_code == 0

@@ -33,12 +33,14 @@ def test_set_global_stop_flag(
         mock_subprocess_run, mocker):
     mocked_sleep = mocker.patch("time.sleep")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
+    mocked_popen = mocker.patch("subprocess.Popen")
     datacenter = "test"
 
     result = run_cli(rebootmgr, ["-v", "--set-global-stop-flag", datacenter])
 
     mocked_sleep.assert_not_called()
     mocked_run.assert_not_called()
+    mocked_popen.assert_not_called()
     assert "Set "+datacenter+" global stop flag:" in result.output
     idx, data = consul_cluster[0].kv.get("service/rebootmgr/stop", dc=datacenter)
     assert idx is not None
@@ -96,12 +98,14 @@ def test_set_local_stop_flag(
         mock_subprocess_run, mocker):
     mocked_sleep = mocker.patch("time.sleep")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
+    mocked_popen = mocker.patch("subprocess.Popen")
     hostname = socket.gethostname().split(".")[0]
 
     result = run_cli(rebootmgr, ["-v", "--set-local-stop-flag"])
 
     mocked_sleep.assert_not_called()
     mocked_run.assert_not_called()
+    mocked_popen.assert_not_called()
     assert "Set "+hostname+" local stop flag:" in result.output
     idx, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(
         hostname))

@@ -30,10 +30,12 @@ def test_post_reboot_consul_checks_passing(
     """
     mocker.patch("time.sleep")
     mocked_run = mocker.patch("subprocess.run")
+    mocked_popen = mocker.patch("subprocess.Popen")
 
     result = run_cli(rebootmgr, ["-v"])
 
     mocked_run.assert_not_called()
+    mocked_popen.assert_not_called()
     assert result.exit_code == 0
 
 
@@ -50,10 +52,12 @@ def test_post_reboot_consul_checks_failing(
 
     mocker.patch("time.sleep")
     mocked_run = mocker.patch("subprocess.run")
+    mocked_popen = mocker.patch("subprocess.Popen")
 
     result = run_cli(rebootmgr, ["-v"])
 
     mocked_run.assert_not_called()
+    mocked_popen.assert_not_called()
     assert result.exit_code == EXIT_CONSUL_CHECKS_FAILED
 
 
@@ -66,10 +70,12 @@ def test_post_reboot_wait_until_healthy_and_are_healthy(
     """
     mocker.patch("time.sleep")
     mocked_run = mocker.patch("subprocess.run")
+    mocked_popen = mocker.patch("subprocess.Popen")
 
     result = run_cli(rebootmgr, ["-v", "--post-reboot-wait-until-healthy"])
 
     mocked_run.assert_not_called()
+    mocked_popen.assert_not_called()
     assert result.exit_code == 0
 
 
@@ -103,10 +109,12 @@ def test_post_reboot_wait_until_healthy(
 
     mocker.patch("time.sleep", new=fake_sleep)
     mocked_run = mocker.patch("subprocess.run")
+    mocked_popen = mocker.patch("subprocess.Popen")
 
     result = run_cli(rebootmgr, ["-v", "--post-reboot-wait-until-healthy"])
 
     mocked_run.assert_not_called()
+    mocked_popen.assert_not_called()
     assert sleep_counter == 0
     assert result.exit_code == 0
 
@@ -135,6 +143,7 @@ def test_post_reboot_phase_fails_with_uptime(
         run_cli, forward_consul_port, default_config, reboot_in_progress,
         reboot_task, mocker):
     mocker.patch('rebootmgr.main.open', new=mock_open(read_data='99999999.9 99999999.9'))
+    mocker.patch("subprocess.run")
     reboot_task("post_boot", "50_another_task.sh")
 
     result = run_cli(rebootmgr, ["-v", "--check-uptime"])
@@ -146,6 +155,7 @@ def test_post_reboot_phase_fails_with_uptime(
 def test_post_reboot_succeeds_with_current_node_in_maintenance(
         run_cli, consul_cluster, reboot_in_progress, forward_consul_port,
         default_config, reboot_task, mocker):
+    mocker.patch("subprocess.run")
     consul_cluster[0].agent.service.register("A", tags=["rebootmgr"])
     consul_cluster[1].agent.service.register("A", tags=["rebootmgr"])
     consul_cluster[2].agent.service.register("A", tags=["rebootmgr"])
@@ -163,6 +173,7 @@ def test_post_reboot_succeeds_with_current_node_in_maintenance(
 def test_post_reboot_fails_with_other_node_in_maintenance(
         run_cli, consul_cluster, reboot_in_progress, forward_consul_port,
         default_config, reboot_task, mocker):
+    mocker.patch("subprocess.run")
     consul_cluster[0].agent.service.register("A", tags=["rebootmgr"])
     consul_cluster[1].agent.service.register("A", tags=["rebootmgr"])
     consul_cluster[2].agent.service.register("A", tags=["rebootmgr"])
@@ -181,6 +192,7 @@ def test_post_reboot_succeeds_with_other_node_in_maintenance_but_ignoring(
         run_cli, consul_cluster, reboot_in_progress, forward_consul_port,
         default_config, reboot_task, mocker):
 
+    mocker.patch("subprocess.run")
     consul_cluster[0].agent.service.register("A", tags=["rebootmgr"])
     consul_cluster[1].agent.service.register("A", tags=["rebootmgr", "ignore_maintenance"])
     consul_cluster[2].agent.service.register("A", tags=["rebootmgr"])
@@ -228,10 +240,12 @@ def test_post_reboot_wait_until_healthy_with_maintenance(
 
     mocker.patch("time.sleep", new=fake_sleep)
     mocked_run = mocker.patch("subprocess.run")
+    mocked_popen = mocker.patch("subprocess.Popen")
 
     result = run_cli(rebootmgr, ["-v", "--post-reboot-wait-until-healthy"])
 
     mocked_run.assert_not_called()
+    mocked_popen.assert_not_called()
     assert sleep_counter == 0
     assert 'There were failed consul checks' in result.output
     assert '_node_maintenance on consul2' in result.output

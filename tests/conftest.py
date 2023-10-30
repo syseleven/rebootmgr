@@ -6,6 +6,7 @@ import socket
 import subprocess
 
 from unittest.mock import DEFAULT
+from unittest.mock import MagicMock
 
 import pytest
 import consul
@@ -38,6 +39,57 @@ def consul_cluster(mocker):
             c.agent.maintenance(False)
             for name, service in c.agent.services().items():
                 c.agent.service.deregister(name)
+
+
+@pytest.fixture
+def mock_subprocess_popen(mocker):
+    """
+    Fixture for testing with mocked `subprocess.Popen`.
+
+    Returns a configured `MagicMock` instance.
+
+    You can optionally pass a `side_effect` as a second argument
+    which will be used as a side_effect for Popen.wait.
+
+    `side_effect` can be an Exception and will then be raised;
+    see the `MagicMock.side_effect` documentation for more information.
+
+    Example:
+
+        mocked_popen = mock_subprocess_popen(["reboot"])
+
+        call_your_tested_code()
+
+        mocked_popen.assert_any_call(["reboot"])
+        mocked_popen.wait.assert_called()
+    """
+    wait_results = {}
+
+    def get_wait_result(command):
+        if isinstance(command, str):
+            command = [command]
+        elif isinstance(command, list):
+            pass
+        else:
+            raise ValueError("command must be either string or list")
+
+        return wait_results[json.dumps(command)]
+
+    def get_mocked_popen(command, *args, **kwargs):
+        mock = MagicMock()
+        return_value, side_effect = get_wait_result(command)
+        mock.wait.return_value = return_value
+        mock.wait.side_effect = side_effect
+        return mock
+
+    mocked_popen = mocker.patch("subprocess.Popen")
+    mocked_popen.side_effect = get_mocked_popen
+
+    def add(command, wait_return_value=None, wait_side_effect=None):
+        wait_results[json.dumps(command)] = wait_return_value, wait_side_effect
+        return mocked_popen
+
+    return add
 
 
 @pytest.fixture
@@ -101,7 +153,7 @@ def run_cli():
 
 
 @pytest.fixture
-def reboot_task(mocker, mock_subprocess_run):
+def reboot_task(mocker, mock_subprocess_popen):
     tasks = {"pre_boot": [], "post_boot": []}
 
     def listdir(directory):
@@ -120,15 +172,17 @@ def reboot_task(mocker, mock_subprocess_run):
 
         tasks[tasktype] += [filename]
 
-        side_effect = None
-        if exit_code != 0:
-            side_effect = subprocess.CalledProcessError(exit_code, filename)
-        elif raise_timeout_expired:
+        if raise_timeout_expired:
+            return_value = None
             side_effect = subprocess.TimeoutExpired(filename, 1234)
+        else:
+            return_value = exit_code
+            side_effect = None
 
-        mock_subprocess_run(
+        return mock_subprocess_popen(
             ["/etc/rebootmgr/{}_tasks/{}".format(tasktype, filename)],
-            side_effect)
+            wait_return_value=return_value,
+            wait_side_effect=side_effect)
 
     return create_task
 
