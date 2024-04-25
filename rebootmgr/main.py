@@ -226,6 +226,9 @@ def post_reboot_state(con, consul_lock, hostname, flags, wait_until_healthy, tas
     check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_postboot"], wait_until_healthy)
 
     # Disable consul (and Zabbix) maintenance
+    # Wait 2 mins to prevent false alarm alerts
+    LOG.info("Sleeping 2 minutes before disabling the consul maintenance...")
+    time.sleep(120)
     con.agent.maintenance(False)
 
     LOG.info("Remove consul key service/rebootmgr/nodes/%s/reboot_required" % hostname)
