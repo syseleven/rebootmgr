@@ -9,9 +9,7 @@ jobs:
       matrix:
         python_version: [36, 37, 38, 39]
     steps:
-      - name: Install python prerequisites
-        run: "sudo pip3 install docker-compose"
       - name: Checkout repository
         uses: actions/checkout@v3
       - name: Perform integration tests for python version ${{ matrix.python_version }}
-        run: "cd ${{ github.workspace }} && docker-compose run --rm integration_tests_py${{ matrix.python_version }}"
+        run: "cd ${{ github.workspace }} && docker compose run --rm integration_tests_py${{ matrix.python_version }}"

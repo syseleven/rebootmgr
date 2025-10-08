@@ -22,7 +22,6 @@ def test_reboot_preboot_task_fails(run_cli, consul_cluster, forward_consul_port,
     mocked_popen = reboot_task("pre_boot", "00_some_task.sh", exit_code=1)
 
     result = run_cli(rebootmgr)
-
     assert "Task /etc/rebootmgr/pre_boot_tasks/00_some_task.sh failed with return code 1" in result.output
     assert result.exit_code == 100
 

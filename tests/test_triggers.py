@@ -206,7 +206,7 @@ def test_reboot_when_global_stop_flag(
 
     mocked_popen.assert_not_called()
     mocked_run.assert_not_called()
-    assert "Global stop flag is set: exit" in result.output
+    assert "Stop flag is set: exit" in result.output
     assert result.exit_code == 102
 
 
@@ -227,7 +227,7 @@ def test_reboot_when_global_stop_flag_after_sleep(
     mocked_sleep.assert_any_call(130)
     mocked_popen.assert_not_called()
     mocked_run.assert_not_called()
-    assert "Global stop flag is set: exit" in result.output
+    assert "Stop flag is set: exit" in result.output
     assert result.exit_code == 102
 
 
@@ -240,7 +240,7 @@ def test_reboot_when_global_stop_flag_when_ignored(
     mocked_popen = mocker.patch("subprocess.Popen")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
 
-    result = run_cli(rebootmgr, ["-v", "--ignore-global-stop-flag"])
+    result = run_cli(rebootmgr, ["-v", "--ignore-stop-flag"])
 
     mocked_sleep.assert_any_call(130)
     mocked_popen.assert_not_called()
@@ -261,7 +261,7 @@ def test_reboot_when_global_stop_flag_after_sleep_when_ignored(
     mocked_popen = mocker.patch("subprocess.Popen")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
 
-    result = run_cli(rebootmgr, ["-v", "--ignore-global-stop-flag"])
+    result = run_cli(rebootmgr, ["-v", "--ignore-stop-flag"])
 
     mocked_sleep.assert_any_call(130)
     mocked_popen.assert_not_called()

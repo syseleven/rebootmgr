@@ -55,7 +55,7 @@ def test_dryrun_reboot_succeeds_with_tasks(run_cli, forward_consul_port,
     result = run_cli(rebootmgr, ["-vv", "--dryrun"])
 
     assert "00_some_task.sh" in result.output
-    assert "in key service/rebootmgr/reboot_in_progress" in result.output
+    assert "service/rebootmgr/reboot_in_progress" in result.output
     assert result.exit_code == 0
 
     # shutdown must not be called

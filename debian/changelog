@@ -1,8 +1,14 @@
+rebootmgr (0.0.26-0+syseleven1) focal; urgency=medium
+
+  * Implement group integration with rebootmgr
+
+ -- Morteza Bashsiz <m.bashsiz@syseleven.de>  Fri,10 Oct 2025 09:10:00 +0100
+
 rebootmgr (0.0.25-0+syseleven1) focal; urgency=medium
 
   * Add option to skip the creation of the reboot_in_progress consul key
 
- -- Dennis Kuhn <d.kuhn@syseleven.de>  Mo,8 May 2023 17:09:00 +0100
+ -- Dennis Kuhn <d.kuhn@syseleven.de>  Mon,8 May 2023 17:09:00 +0100
 
 rebootmgr (0.0.22-0+syseleven1) xenial; urgency=medium
 

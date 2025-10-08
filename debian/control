@@ -11,7 +11,6 @@ Build-Depends: debhelper (>= 9),
                python3-colorlog,
                python3-retrying,
                python3-all,
-               dh-systemd,
                dh-python
 X-Python3-Version: >= 3.2
 Standards-Version: 3.9.7
