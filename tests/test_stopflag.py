@@ -20,11 +20,10 @@ def test_verbose(run_cli, consul_cluster, forward_consul_port, default_config):
     consul_cluster[0].kv.put("service/rebootmgr/stop", "reason: stopped for testing")
 
     result1 = run_cli(rebootmgr, ["-v"])
-    assert "Global stop flag is set" in result1.output
-    assert "service/rebootmgr/stop" not in result1.output
+    assert "Stop flag is set" in result1.output
 
     result2 = run_cli(rebootmgr, ["-vv"])
-    assert "Global stop flag is set" in result2.output
+    assert "Stop flag is set" in result2.output
     assert "service/rebootmgr/stop" in result2.output
 
 

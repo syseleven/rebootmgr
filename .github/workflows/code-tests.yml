@@ -6,7 +6,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install python prerequisites
-        run: "sudo pip3 install tox"
+        run: |
+          sudo pip3 install tox --break-system-packages --ignore-installed
       - name: Checkout repository
         uses: actions/checkout@v3
       - name: Perform syntax lint
@@ -16,7 +17,8 @@ jobs:
     continue-on-error: true
     steps:
       - name: Install python prerequisites
-        run: "sudo pip3 install tox"
+        run: |
+          sudo pip3 install tox --break-system-packages --ignore-installed
       - name: Checkout repository
         uses: actions/checkout@v3
       - name: Perform safety checks

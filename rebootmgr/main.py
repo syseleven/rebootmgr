@@ -11,6 +11,7 @@ import colorlog
 import holidays
 import datetime
 from typing import List
+from typing import Tuple
 
 from retrying import retry
 from consul import Consul
@@ -31,7 +32,7 @@ EXIT_HOLIDAY = 6
 # exit codes >= 100 are permanent
 EXIT_TASK_FAILED = 100
 EXIT_NODE_DISABLED = 101
-EXIT_GLOBAL_STOP_FLAG_SET = 102
+EXIT_STOP_FLAG_SET = 102
 EXIT_DID_NOT_REALLY_REBOOT = 103
 EXIT_CONFIGURATION_IS_MISSING = 104
 
@@ -54,7 +55,7 @@ def logsetup(verbosity):
     LOG.debug("Debug logging enabled")
 
 
-def run_tasks(tasktype, con, hostname, dryrun, task_timeout):
+def run_tasks(tasktype, con, hostname, dryrun, task_timeout, group):
     """
     run every script in /etc/rebootmgr/pre_boot_tasks or
     /etc/rebootmgr/post_boot_tasks
@@ -63,6 +64,8 @@ def run_tasks(tasktype, con, hostname, dryrun, task_timeout):
     dryrun If true the environment variable REBOOTMGR_DRY_RUN=1 is passed to
            the scripts
     """
+    group_key = resolve_group_key(con, group, hostname)
+    LOG.info("Looking up group from hostname: %s", group_key)
     env = dict(os.environ)
     if dryrun:
         env["REBOOTMGR_DRY_RUN"] = "1"
@@ -85,7 +88,7 @@ def run_tasks(tasktype, con, hostname, dryrun, task_timeout):
             data["enabled"] = False
             data["message"] = "Could not finish task %s in %i minutes" % (task, task_timeout)
             put_config(con, hostname, data)
-            con.kv.delete("service/rebootmgr/reboot_in_progress")
+            con.kv.delete(group_key)
             sys.exit(EXIT_TASK_FAILED)
         if ret != 0:
             LOG.error("Task %s failed with return code %s. Exit" % (task, ret))
@@ -144,28 +147,122 @@ def check_consul_services(con, hostname, ignore_failed_checks: bool, tags: List[
             LOG.info("All consul checks passed.")
 
 
-@retry(wait_fixed=2000, stop_max_delay=20000)
-def check_reboot_in_progress(con):
+def resolve_group_key(con, group, hostname):
     """
-    Check for the key service/rebootmgr/reboot_in_progress.
-    If the key contains the nodename, this node is in post reboot state.
-    The key may be absent.
+    Resolve the correct reboot status key from Consul KV store.
+
+    Priority:
+    1. Use explicit group if provided.
+    2. Use hostname-based group key.
+    3. Fallback to default key.
+
+    Returns:
+        Full key path as string.
     """
-    k, v = con.kv.get("service/rebootmgr/reboot_in_progress")
-    if v and "Value" in v.keys() and v["Value"]:
-        return v["Value"].decode()
-    return ""
+    config = get_config(con, hostname)
+    if group:
+        key = f"service/rebootmgr/{group}_reboot_in_progress"
+        return key
+
+    group_key_name = config.get('group')
+    if group_key_name:
+        key = f"service/rebootmgr/{group_key_name}_reboot_in_progress"
+        return key
+
+    # Fallback
+    key = "service/rebootmgr/reboot_in_progress"
+    return key
+
+
+def resolve_stop_flag(con, group, hostname):
+    """
+    Resolve the correct stop flag from Consul KV store.
+
+    Priority:
+    1. Use explicit group if provided.
+    2. Use hostname-based group key.
+    3. Fallback to default key.
+
+    Returns:
+        Full key path as string.
+    """
+    config = get_config(con, hostname)
+    if group:
+        key = f"service/rebootmgr/{group}_stop"
+        return key
+
+    group_key_name = config.get('group')
+    if group_key_name:
+        key = f"service/rebootmgr/{group_key_name}_stop"
+        return key
+
+    # Fallback
+    key = "service/rebootmgr/stop"
+    return key
+
+
+def resolve_lock(con, group, hostname):
+    """
+    Resolve the correct lock flag from Consul KV store.
+
+    Priority:
+    1. Use explicit group if provided.
+    2. Use hostname-based group key.
+    3. Fallback to default key.
+
+    Returns:
+        Full key path as string.
+    """
+    config = get_config(con, hostname)
+    if group:
+        key = f"service/rebootmgr/{group}_lock"
+        return key
+
+    group_key_name = config.get('group')
+    if group_key_name:
+        key = f"service/rebootmgr/{group_key_name}_lock"
+        return key
+
+    # Fallback
+    key = "service/rebootmgr/lock"
+    return key
 
 
 @retry(wait_fixed=2000, stop_max_delay=20000)
-def check_stop_flag(con) -> bool:
+def check_reboot_in_progress(con, group, hostname):
     """
-    Check the global stop flag. Present is True, absent is False.
+    Check the reboot state of the host.
+
+    Returns:
+        Decoded value of the resolved key if found, else empty string.
     """
+    def get_decoded_value(key):
+        _, value = con.kv.get(key)
+        if value and value.get("Value"):
+            return value["Value"].decode()
+        return ""
+
+    group_key = resolve_group_key(con, group, hostname)
+    LOG.info("Looking up group from: %s", group_key)
+    return get_decoded_value(group_key)
+
+
+@retry(wait_fixed=2000, stop_max_delay=20000)
+def check_stop_flag(con, group, hostname) -> Tuple[bool, str]:
+    """
+    Check the Global stop flag first and then the group one. Present is True, absent is False.
+    """
+    LOG.info("Looking up Global stop flag from: service/rebootmgr/stop")
     k, v = con.kv.get("service/rebootmgr/stop")
     if v:
-        return True
-    return False
+        return True, "service/rebootmgr/stop"
+    else:
+        stop_flag = resolve_stop_flag(con, group, hostname)
+        LOG.info("Looking up stop flag from: /%s", stop_flag)
+        k, v = con.kv.get(stop_flag)
+        if v:
+            return True, stop_flag
+    return False, "Null"
 
 
 @retry(wait_fixed=2000, stop_max_delay=20000)
@@ -211,8 +308,10 @@ def is_node_disabled(con, hostname) -> bool:
     return not data.get('enabled', False)
 
 
-def post_reboot_state(con, consul_lock, hostname, flags, wait_until_healthy, task_timeout):
-    LOG.info("Found my hostname in service/rebootmgr/reboot_in_progress")
+def post_reboot_state(con, consul_lock, hostname, flags, wait_until_healthy, task_timeout, group):
+    group_key = resolve_group_key(con, group, hostname)
+    LOG.info("Looking up group from: %s", group_key)
+    LOG.info("Found my hostname in %s" % group_key)
 
     # Uptime greater 2 hours
     if flags.get("check_uptime") and uptime() > 2 * 60 * 60:
@@ -222,7 +321,7 @@ def post_reboot_state(con, consul_lock, hostname, flags, wait_until_healthy, tas
     LOG.info("Entering post reboot state")
 
     check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_postboot"], wait_until_healthy)
-    run_tasks("post_boot", con, hostname, flags.get("dryrun"), task_timeout)
+    run_tasks("post_boot", con, hostname, flags.get("dryrun"), task_timeout, group)
     check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_postboot"], wait_until_healthy)
 
     # Disable consul (and Zabbix) maintenance
@@ -230,21 +329,23 @@ def post_reboot_state(con, consul_lock, hostname, flags, wait_until_healthy, tas
 
     LOG.info("Remove consul key service/rebootmgr/nodes/%s/reboot_required" % hostname)
     con.kv.delete("service/rebootmgr/nodes/%s/reboot_required" % hostname)
-    LOG.info("Remove consul key service/rebootmgr/reboot_in_progress")
-    con.kv.delete("service/rebootmgr/reboot_in_progress")
+    LOG.info("Remove consul key %s" % group_key)
+    con.kv.delete(group_key)
 
     consul_lock.release()
 
 
-def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout):
+def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout, group):
+    group_key = resolve_group_key(con, group, hostname)
     today = datetime.date.today()
     if flags.get("check_holidays") and today in holidays.DE():
         LOG.info("Refuse to run on holiday")
         sys.exit(EXIT_HOLIDAY)
 
-    if check_stop_flag(con) and not flags.get("ignore_global_stop_flag"):
-        LOG.info("Global stop flag is set: exit")
-        sys.exit(EXIT_GLOBAL_STOP_FLAG_SET)
+    must_stop, stop_flag = check_stop_flag(con, group, hostname)
+    if must_stop and not flags.get("ignore_stop_flag"):
+        LOG.info("Stop flag is set: exit (%s)" % stop_flag)
+        sys.exit(EXIT_STOP_FLAG_SET)
 
     if is_node_disabled(con, hostname) and not flags.get("ignore_node_disabled"):
         LOG.info("Rebootmgr is disabled in consul config for this node. Exit")
@@ -258,7 +359,7 @@ def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout):
     check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_preboot"])
 
     LOG.info("Executing pre reboot tasks")
-    run_tasks("pre_boot", con, hostname, flags.get("dryrun"), task_timeout)
+    run_tasks("pre_boot", con, hostname, flags.get("dryrun"), task_timeout, group)
 
     if not flags.get("lazy_consul_checks"):
         LOG.info("Sleep for 2 minutes. Waiting for consul checks.")
@@ -271,9 +372,10 @@ def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout):
         LOG.error("Lost consul lock. Exit")
         sys.exit(EXIT_CONSUL_LOST_LOCK)
 
-    if check_stop_flag(con) and not flags.get("ignore_global_stop_flag"):
-        LOG.info("Global stop flag is set: exit")
-        sys.exit(EXIT_GLOBAL_STOP_FLAG_SET)
+    must_stop, stop_flag = check_stop_flag(con, group, hostname)
+    if must_stop and not flags.get("ignore_stop_flag"):
+        LOG.info("Stop flag is set: exit (%s)" % stop_flag)
+        sys.exit(EXIT_STOP_FLAG_SET)
 
     # check again if reboot is still required
     if flags.get("check_triggers") and not is_reboot_required(con, hostname):
@@ -281,10 +383,10 @@ def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout):
 
     if not flags.get("skip_reboot_in_progress_key"):
         if not flags.get("dryrun"):
-            LOG.debug("Write %s in key service/rebootmgr/reboot_in_progress" % hostname)
-            con.kv.put("service/rebootmgr/reboot_in_progress", hostname)
+            LOG.debug("Write %s in key %s" % (hostname, group_key))
+            con.kv.put(group_key, hostname)
         else:
-            LOG.debug("Would write %s in key service/rebootmgr/reboot_in_progress" % hostname)
+            LOG.debug("Would write %s in %s" % (hostname, group_key))
 
     consul_lock.release()
 
@@ -357,13 +459,12 @@ def getuser():
     return user or getpass.getuser()
 
 
-def do_set_global_stop_flag(con, dc, reason=None):
-    msg_parts = ["Set by", getuser(), str(datetime.datetime.now())]
-    if reason:
-        msg_parts.append(reason)
-    message = " ".join(msg_parts)
-    con.kv.put("service/rebootmgr/stop", message, dc=dc)
-    LOG.warning("Set %s global stop flag: %s", dc, message)
+def do_set_global_stop_flag(con, dc, hostname, stop_reason):
+    reason = "Set by " + getuser()\
+             + ", " + str(datetime.datetime.now())\
+             + ", stop reason: " + stop_reason
+    con.kv.put("service/rebootmgr/stop", reason, dc=dc)
+    LOG.warning("Set %s global stop flag: %s", dc, reason)
 
 
 def do_unset_global_stop_flag(con, dc):
@@ -371,19 +472,18 @@ def do_unset_global_stop_flag(con, dc):
     LOG.warning("Remove %s global stop flag", dc)
 
 
-def do_set_local_stop_flag(con, hostname, reason=None):
-    msg_parts = ["Node disabled by", getuser(), str(datetime.datetime.now())]
-    if reason:
-        msg_parts.append(reason)
-    message = " ".join(msg_parts)
+def do_set_local_stop_flag(con, hostname, stop_reason):
+    reason = "Node disabled by " + getuser()\
+             + ", " + str(datetime.datetime.now())\
+             + ", stop reason: " + stop_reason
     config = get_config(con, hostname)
     config["enabled"] = False
-    config["message"] = message
+    config["message"] = reason
     put_config(con, hostname, config)
-    LOG.warning("Set %s local stop flag: %s", hostname, message)
+    LOG.warning("Set %s local stop flag: %s", hostname, reason)
 
 
-def do_unset_local_stop_flag(con, hostname):
+def do_unset_local_stop_flag(con, hostname, maintenance_reason, stop_reason):
     config = get_config(con, hostname)
     config["enabled"] = True
     config["message"] = ""
@@ -396,7 +496,7 @@ def do_unset_local_stop_flag(con, hostname):
 @click.option("--check-triggers", help="Only reboot if a reboot is necessary", is_flag=True)
 @click.option("-n", "--dryrun", help="Run tasks and check services but don't reboot", is_flag=True)
 @click.option("-u", "--check-uptime", help="Make sure, that the uptime is less than 2 hours.", is_flag=True)
-@click.option("-s", "--ignore-global-stop-flag", help="ignore the global stop flag (service/rebootmgr/stop).", is_flag=True)
+@click.option("-s", "--ignore-stop-flag", help="ignore the related stop flag (example service/rebootmgr/ceph_stop).", is_flag=True)
 @click.option("--check-holidays", help="Don't reboot on holidays", is_flag=True)
 @click.option("--post-reboot-wait-until-healthy", help="Wait until healthy in post reboot, instead of exit", is_flag=True)
 @click.option("--lazy-consul-checks", help="Don't repeat consul checks after two minutes", is_flag=True)
@@ -414,14 +514,15 @@ def do_unset_local_stop_flag(con, hostname):
 @click.option("--unset-global-stop-flag", metavar="CLUSTER", help="Remove the cluster-wide stop flag in the specified cluster")
 @click.option("--set-local-stop-flag", help="Stop the rebootmgr on this node", is_flag=True)
 @click.option("--unset-local-stop-flag", help="Remove the stop flag on this node", is_flag=True)
-@click.option("--stop-reason", help="Reason to set the stop flag")
+@click.option("--stop-reason", help="Reason to set the stop flag", default="stopped by rebootmgr")
 @click.option("--skip-reboot-in-progress-key", help="Don't set the reboot_in_progress consul key before rebooting", is_flag=True)
 @click.option("--task-timeout", help="Minutes that rebootmgr waits for each task to finish. Default are 120 minutes", default=120, type=int)
+@click.option("--group", help="Group name this host belongs to in our infrastructure", default="", type=str)
 @click.version_option()
-def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, maintenance_reason, ignore_global_stop_flag,
+def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, maintenance_reason, ignore_stop_flag,
         ignore_node_disabled, ignore_failed_checks, check_holidays, post_reboot_wait_until_healthy, lazy_consul_checks,
         ensure_config, set_global_stop_flag, unset_global_stop_flag, set_local_stop_flag, unset_local_stop_flag, stop_reason,
-        skip_reboot_in_progress_key, task_timeout):
+        skip_reboot_in_progress_key, task_timeout, group):
     """Reboot Manager
 
     Default values of parameteres are environment variables (if set)
@@ -441,7 +542,7 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
         sys.exit(0)
 
     if set_global_stop_flag:
-        do_set_global_stop_flag(con, set_global_stop_flag, reason=stop_reason)
+        do_set_global_stop_flag(con, set_global_stop_flag, hostname, stop_reason)
         sys.exit(0)
 
     if unset_global_stop_flag:
@@ -449,11 +550,11 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
         sys.exit(0)
 
     if set_local_stop_flag:
-        do_set_local_stop_flag(con, hostname, reason=stop_reason)
+        do_set_local_stop_flag(con, hostname, stop_reason)
         sys.exit(0)
 
     if unset_local_stop_flag:
-        do_unset_local_stop_flag(con, hostname)
+        do_unset_local_stop_flag(con, hostname, maintenance_reason, stop_reason)
         sys.exit(0)
 
     if not config_is_present_and_valid(con, hostname):
@@ -465,27 +566,30 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
              "check_uptime": check_uptime,
              "dryrun": dryrun,
              "maintenance_reason": maintenance_reason,
-             "ignore_global_stop_flag": ignore_global_stop_flag,
+             "ignore_stop_flag": ignore_stop_flag,
              "ignore_node_disabled": ignore_node_disabled,
              "ignore_failed_checks": ignore_failed_checks,
              "check_holidays": check_holidays,
              "lazy_consul_checks": lazy_consul_checks,
-             "skip_reboot_in_progress_key": skip_reboot_in_progress_key}
+             "skip_reboot_in_progress_key": skip_reboot_in_progress_key,
+             "group": group}
 
     check_consul_cluster(con, ignore_failed_checks)
 
-    consul_lock = Lock(con, "service/rebootmgr/lock")
+    lock_key = resolve_lock(con, group, hostname)
+    consul_lock = Lock(con, lock_key)
     try:
         # Try to get Lock without waiting
         if not consul_lock.acquire(blocking=False):
             LOG.error("Could not get consul lock. Exit.")
             sys.exit(EXIT_CONSUL_LOCK_FAILED)
 
-        reboot_in_progress = check_reboot_in_progress(con)
+        reboot_in_progress = check_reboot_in_progress(con, group, hostname)
+
         if reboot_in_progress:
             if reboot_in_progress.startswith(hostname):
                 # We are in post_reboot state
-                post_reboot_state(con, consul_lock, hostname, flags, post_reboot_wait_until_healthy, task_timeout)
+                post_reboot_state(con, consul_lock, hostname, flags, post_reboot_wait_until_healthy, task_timeout, group)
                 sys.exit(0)
             # Another node has the lock
             else:
@@ -495,8 +599,8 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
         # we are free to reboot
         else:
             # We are in pre_reboot state
-            pre_reboot_state(con, consul_lock, hostname, flags, task_timeout)
-
+            pre_reboot_state(con, consul_lock, hostname, flags, task_timeout, group)
+            group_key = resolve_group_key(con, group, hostname)
             if not dryrun:
                 # Set a consul maintenance, which creates a 15 maintenance window in Zabbix
                 con.agent.maintenance(True, maintenance_reason)
@@ -509,8 +613,8 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
                     subprocess.run(["shutdown", "-r", "+1"], check=True)
                 except Exception as e:
                     LOG.error("Could not run reboot")
-                    LOG.error("Remove consul key service/rebootmgr/reboot_in_progress")
-                    con.kv.delete("service/rebootmgr/reboot_in_progress")
+                    LOG.error("Remove consul key %s" % group_key)
+                    con.kv.delete(group_key)
                     raise e
     finally:
         consul_lock.release()
