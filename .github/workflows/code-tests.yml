@@ -9,7 +9,7 @@ jobs:
         run: |
           sudo pip3 install tox --break-system-packages --ignore-installed
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
       - name: Perform syntax lint
         run: "cd ${{ github.workspace }} && tox -e lint"
   Safety-Checks:
@@ -20,6 +20,6 @@ jobs:
         run: |
           sudo pip3 install tox --break-system-packages --ignore-installed
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
       - name: Perform safety checks
         run: "cd ${{ github.workspace }} && tox -e safety"

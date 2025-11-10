@@ -10,6 +10,6 @@ jobs:
         python_version: [36, 37, 38, 39]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
       - name: Perform integration tests for python version ${{ matrix.python_version }}
         run: "cd ${{ github.workspace }} && docker compose run --rm integration_tests_py${{ matrix.python_version }}"
