@@ -577,7 +577,13 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
     check_consul_cluster(con, ignore_failed_checks)
 
     lock_key = resolve_lock(con, group, hostname)
-    consul_lock = Lock(con, lock_key)
+    # Explicitly disable all health checks on the session. Some scripts may
+    # cause a short network outage and we don't want a short failing serfHealth
+    # to invalidate our lock for that.  We rely on the TTL to invalidate the
+    # session in case of disasters.
+    session = con.session.create(ttl=600, checks=[])
+    consul_lock = Lock(con, lock_key, session=session)
+
     try:
         # Try to get Lock without waiting
         if not consul_lock.acquire(blocking=False):
