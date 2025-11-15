@@ -1,4 +1,4 @@
-click==8.0.4
+click==8.3.1
 colorlog==6.7.0
 python-consul>=0.7.1
 requests==2.27.1
