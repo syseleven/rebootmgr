@@ -7,7 +7,7 @@ if not sys.version_info >= (3, 5):
 
 setup(
     name="rebootmgr",
-    version="0.0.29",
+    version="0.0.30",
     packages=find_packages(),
     maintainer="Syseleven Cloudstackers",
     maintainer_email="cloudstackers@syseleven.de",
