@@ -17,6 +17,7 @@ from retrying import retry
 from consul import Consul
 from consul_lib import Lock
 from consul_lib.services import get_local_checks, get_failed_cluster_checks
+from consul_lib.session import SessionRenewer
 
 LOG = logging.getLogger(__name__)
 
@@ -583,6 +584,10 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
     # session in case of disasters.
     session = con.session.create(ttl=600, checks=[])
     consul_lock = Lock(con, lock_key, session=session)
+
+    LOG.debug("Starting session_renewer.")
+    consul_lock.session_renewer = SessionRenewer(session, con)
+    consul_lock.session_renewer.start()
 
     try:
         # Try to get Lock without waiting
