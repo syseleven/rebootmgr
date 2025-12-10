@@ -11,7 +11,6 @@ from unittest.mock import MagicMock
 import pytest
 import consul
 
-
 @pytest.fixture
 def consul_cluster(mocker):
     clients = [consul.Consul(host="consul{}".format(i + 1)) for i in range(4)]

@@ -10,6 +10,7 @@ import time
 import colorlog
 import holidays
 import datetime
+import requests
 from typing import List
 from typing import Tuple
 
@@ -36,6 +37,10 @@ EXIT_NODE_DISABLED = 101
 EXIT_STOP_FLAG_SET = 102
 EXIT_DID_NOT_REALLY_REBOOT = 103
 EXIT_CONFIGURATION_IS_MISSING = 104
+EXIT_CRITICAL_ALERTS_STILL_ACTIVE = 105
+
+CHECK_CRITICAL_ALERTS_TIMEOUT = 300
+CHECK_CRITICAL_ALERTS_INTERVAL = 10
 
 
 def logsetup(verbosity):
@@ -309,8 +314,64 @@ def is_node_disabled(con, hostname) -> bool:
     return not data.get('enabled', False)
 
 
+def release_host(con, consul_lock, hostname, group_key):
+    # remove consul maintenance
+    LOG.info("Removing consul maintenance.")
+    con.agent.maintenance(False)
+
+    LOG.info("Remove consul key service/rebootmgr/nodes/%s/reboot_required" % hostname)
+    con.kv.delete("service/rebootmgr/nodes/%s/reboot_required" % hostname)
+    LOG.info("Remove consul key %s" % group_key)
+    con.kv.delete(group_key)
+
+    # release consul lock
+    LOG.info("Releasing consul lock")
+    consul_lock.release()
+
+
+def get_firing_critical_alerts(hostname, prometheus_url):
+    """
+    Query Prometheus for firing critical alerts
+    filtered by a given hostname (label: node).
+    """
+    try:
+        response = requests.get(prometheus_url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+
+        alerts = data.get("data", {}).get("alerts", [])
+
+        filtered = [
+            a for a in alerts
+            if a.get("state") == "firing"
+            and a.get("labels", {}).get("severity") == "critical"
+            and a.get("labels", {}).get("node") == hostname
+        ]
+
+        return filtered
+
+    except requests.exceptions.RequestException as e:
+        LOG.error(f"Error getting critical alerts: {e}")
+        return []
+
+
+def wait_for_critical_alerts(con, consul_lock, hostname, group_key, prometheus_server_domain):
+    prometheus_url = "https://{}:9090/api/v1/alerts".format(prometheus_server_domain)
+    start_time = time.time()
+    while time.time() - start_time < CHECK_CRITICAL_ALERTS_TIMEOUT:
+        LOG.info("Getting critical alerts from %s", prometheus_url)
+        if not get_firing_critical_alerts(hostname, prometheus_url):
+            LOG.info("No critical alert, release the node")
+            release_host(con, consul_lock, hostname, group_key)
+            return
+        LOG.info("Critical alerts still active for %s", prometheus_url)
+        time.sleep(CHECK_CRITICAL_ALERTS_INTERVAL)
+    raise TimeoutError("Could not remove silence for host: %s until critical alerts are gone, try again later.", hostname)
+
+
 def post_reboot_state(con, consul_lock, hostname, flags, wait_until_healthy, task_timeout, group):
     group_key = resolve_group_key(con, group, hostname)
+    prometheus_server_domain = flags.get("prometheus_server")
     LOG.info("Looking up group from: %s", group_key)
     LOG.info("Found my hostname in %s" % group_key)
 
@@ -325,15 +386,14 @@ def post_reboot_state(con, consul_lock, hostname, flags, wait_until_healthy, tas
     run_tasks("post_boot", con, hostname, flags.get("dryrun"), task_timeout, group)
     check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_postboot"], wait_until_healthy)
 
-    # Disable consul (and Zabbix) maintenance
-    con.agent.maintenance(False)
-
-    LOG.info("Remove consul key service/rebootmgr/nodes/%s/reboot_required" % hostname)
-    con.kv.delete("service/rebootmgr/nodes/%s/reboot_required" % hostname)
-    LOG.info("Remove consul key %s" % group_key)
-    con.kv.delete(group_key)
-
-    consul_lock.release()
+    if prometheus_server_domain:
+        try:
+            wait_for_critical_alerts(con, consul_lock, hostname, group_key, prometheus_server_domain)
+        except TimeoutError as e:
+            LOG.error(f"Error waiting for critical alerts to be gone: {e}")
+            sys.exit(EXIT_CRITICAL_ALERTS_STILL_ACTIVE)
+    else:
+        release_host(con, consul_lock, hostname, group_key)
 
 
 def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout, group):
@@ -520,10 +580,12 @@ def do_unset_local_stop_flag(con, hostname, maintenance_reason, stop_reason):
 @click.option("--task-timeout", help="Minutes that rebootmgr waits for each task to finish. Default are 120 minutes", default=120, type=int)
 @click.option("--group", help="Group name this host belongs to in our infrastructure", default="", type=str)
 @click.version_option()
+@click.option("--prometheus-server", metavar="PROMETHEUS_SERVER", help="Domain of Prometheus Server. Default env PROMETHEUS_SERVER",
+              default=os.environ.get("PROMETHEUS_SERVER"))
 def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, maintenance_reason, ignore_stop_flag,
         ignore_node_disabled, ignore_failed_checks, check_holidays, post_reboot_wait_until_healthy, lazy_consul_checks,
         ensure_config, set_global_stop_flag, unset_global_stop_flag, set_local_stop_flag, unset_local_stop_flag, stop_reason,
-        skip_reboot_in_progress_key, task_timeout, group):
+        skip_reboot_in_progress_key, task_timeout, group, prometheus_server):
     """Reboot Manager
 
     Default values of parameteres are environment variables (if set)
@@ -573,7 +635,8 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
              "check_holidays": check_holidays,
              "lazy_consul_checks": lazy_consul_checks,
              "skip_reboot_in_progress_key": skip_reboot_in_progress_key,
-             "group": group}
+             "group": group,
+             "prometheus_server": prometheus_server}
 
     check_consul_cluster(con, ignore_failed_checks)
 
