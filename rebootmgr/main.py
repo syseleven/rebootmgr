@@ -51,7 +51,9 @@ def logsetup(verbosity):
     if verbosity > 1:
         level = logging.DEBUG
 
-    stderr_formatter = colorlog.ColoredFormatter("%(log_color)s%(name)s [%(levelname)s] %(message)s")
+    stderr_formatter = colorlog.ColoredFormatter(
+        "%(log_color)s%(name)s [%(levelname)s] %(message)s"
+    )
     stderr_handler = logging.StreamHandler()
     stderr_handler.setFormatter(stderr_formatter)
 
@@ -88,11 +90,16 @@ def run_tasks(tasktype, con, hostname, dryrun, task_timeout, group):
                 p.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 p.kill()
-            LOG.error("Could not finish task %s in %i minutes. Exit" % (task, task_timeout))
+            LOG.error(
+                "Could not finish task %s in %i minutes. Exit" % (task, task_timeout)
+            )
             LOG.error("Disable rebootmgr in consul for this node")
             data = get_config(con, hostname)
             data["enabled"] = False
-            data["message"] = "Could not finish task %s in %i minutes" % (task, task_timeout)
+            data["message"] = "Could not finish task %s in %i minutes" % (
+                task,
+                task_timeout,
+            )
             put_config(con, hostname, data)
             con.kv.delete(group_key)
             sys.exit(EXIT_TASK_FAILED)
@@ -112,15 +119,21 @@ def get_whitelist(con) -> List[str]:
     return []
 
 
-def check_consul_services(con, hostname, ignore_failed_checks: bool, tags: List[str], wait_until_healthy=False):
+def check_consul_services(
+    con, hostname, ignore_failed_checks: bool, tags: List[str], wait_until_healthy=False
+):
     """
     check all consul services for this node with the tag "rebootmgr"
     """
     whitelist = get_whitelist(con)
 
     if whitelist:
-        LOG.warning("Checks from the following hosts will be ignored, " +
-                    "because service/rebootmgr/ignore_failed_checks is set: {}".format(", ".join(whitelist)))
+        LOG.warning(
+            "Checks from the following hosts will be ignored, "
+            + "because service/rebootmgr/ignore_failed_checks is set: {}".format(
+                ", ".join(whitelist)
+            )
+        )
 
     local_checks = get_local_checks(con, tags=tags)
     LOG.debug("local_checks: %s" % local_checks)
@@ -136,16 +149,21 @@ def check_consul_services(con, hostname, ignore_failed_checks: bool, tags: List[
             if check["Node"] not in whitelist:
                 # If the check is failing because the node is us and it is the
                 # is-in-maintenance-mode check, ignore it.
-                if name == '_node_maintenance' and check["Node"] == hostname:
+                if name == "_node_maintenance" and check["Node"] == hostname:
                     pass
                 else:
                     failed_names.append(name + " on " + check["Node"])
 
         if failed_names:
             if wait_until_healthy:
-                LOG.error("There were failed consul checks (%s). Trying again in 2 minutes.", failed_names)
+                LOG.error(
+                    "There were failed consul checks (%s). Trying again in 2 minutes.",
+                    failed_names,
+                )
                 time.sleep(120)
-                check_consul_services(con, hostname, ignore_failed_checks, tags, wait_until_healthy)
+                check_consul_services(
+                    con, hostname, ignore_failed_checks, tags, wait_until_healthy
+                )
             else:
                 LOG.error("There were failed consul checks (%s). Exit.", failed_names)
                 sys.exit(EXIT_CONSUL_CHECKS_FAILED)
@@ -170,7 +188,7 @@ def resolve_group_key(con, group, hostname):
         key = f"service/rebootmgr/{group}_reboot_in_progress"
         return key
 
-    group_key_name = config.get('group')
+    group_key_name = config.get("group")
     if group_key_name:
         key = f"service/rebootmgr/{group_key_name}_reboot_in_progress"
         return key
@@ -197,7 +215,7 @@ def resolve_stop_flag(con, group, hostname):
         key = f"service/rebootmgr/{group}_stop"
         return key
 
-    group_key_name = config.get('group')
+    group_key_name = config.get("group")
     if group_key_name:
         key = f"service/rebootmgr/{group_key_name}_stop"
         return key
@@ -224,7 +242,7 @@ def resolve_lock(con, group, hostname):
         key = f"service/rebootmgr/{group}_lock"
         return key
 
-    group_key_name = config.get('group')
+    group_key_name = config.get("group")
     if group_key_name:
         key = f"service/rebootmgr/{group_key_name}_lock"
         return key
@@ -242,6 +260,7 @@ def check_reboot_in_progress(con, group, hostname):
     Returns:
         Decoded value of the resolved key if found, else empty string.
     """
+
     def get_decoded_value(key):
         _, value = con.kv.get(key)
         if value and value.get("Value"):
@@ -288,7 +307,7 @@ def is_reboot_required(con, nodename) -> bool:
 
 
 def uptime() -> float:
-    with open('/proc/uptime', 'r') as f:
+    with open("/proc/uptime", "r") as f:
         uptime = float(f.readline().split()[0])
         return uptime
 
@@ -296,22 +315,32 @@ def uptime() -> float:
 def check_consul_cluster(con, ignore_failed_checks: bool) -> None:
     whitelist = get_whitelist(con)
     if whitelist:
-        LOG.warning("Status of the following hosts will be ignored, " +
-                    "because service/rebootmgr/ignore_failed_checks is set: {}".format(", ".join(whitelist)))
+        LOG.warning(
+            "Status of the following hosts will be ignored, "
+            + "because service/rebootmgr/ignore_failed_checks is set: {}".format(
+                ", ".join(whitelist)
+            )
+        )
     if ignore_failed_checks:
         LOG.warning("All consul cluster checks are ignored.")
     else:
         for member in con.agent.members():
             # Consul member status 1 = Alive, 3 = Left
-            if "Status" in member.keys() and member["Status"] not in [1, 3] and member["Name"] not in whitelist:
-                LOG.error("Consul cluster not healthy: Node %s failed. Exit" % member["Name"])
+            if (
+                "Status" in member.keys()
+                and member["Status"] not in [1, 3]
+                and member["Name"] not in whitelist
+            ):
+                LOG.error(
+                    "Consul cluster not healthy: Node %s failed. Exit" % member["Name"]
+                )
                 sys.exit(EXIT_CONSUL_NODE_FAILED)
 
 
 @retry(wait_fixed=2000, stop_max_delay=20000)
 def is_node_disabled(con, hostname) -> bool:
     data = get_config(con, hostname)
-    return not data.get('enabled', False)
+    return not data.get("enabled", False)
 
 
 def release_host(con, consul_lock, hostname, group_key):
@@ -342,7 +371,8 @@ def get_firing_critical_alerts(hostname, prometheus_url):
         alerts = data.get("data", {}).get("alerts", [])
 
         filtered = [
-            a for a in alerts
+            a
+            for a in alerts
             if a.get("state") == "firing"
             and a.get("labels", {}).get("severity") == "critical"
             and a.get("labels", {}).get("node") == hostname
@@ -355,7 +385,9 @@ def get_firing_critical_alerts(hostname, prometheus_url):
         return []
 
 
-def wait_for_critical_alerts(con, consul_lock, hostname, group_key, prometheus_server_domain):
+def wait_for_critical_alerts(
+    con, consul_lock, hostname, group_key, prometheus_server_domain
+):
     prometheus_url = "https://{}:9090/api/v1/alerts".format(prometheus_server_domain)
     start_time = time.time()
     while time.time() - start_time < CHECK_CRITICAL_ALERTS_TIMEOUT:
@@ -366,10 +398,15 @@ def wait_for_critical_alerts(con, consul_lock, hostname, group_key, prometheus_s
             return
         LOG.info("Critical alerts still active for %s", prometheus_url)
         time.sleep(CHECK_CRITICAL_ALERTS_INTERVAL)
-    raise TimeoutError("Could not remove silence for host: %s until critical alerts are gone, try again later.", hostname)
+    raise TimeoutError(
+        "Could not remove silence for host: %s until critical alerts are gone, try again later.",
+        hostname,
+    )
 
 
-def post_reboot_state(con, consul_lock, hostname, flags, wait_until_healthy, task_timeout, group):
+def post_reboot_state(
+    con, consul_lock, hostname, flags, wait_until_healthy, task_timeout, group
+):
     group_key = resolve_group_key(con, group, hostname)
     prometheus_server_domain = flags.get("prometheus_server")
     LOG.info("Looking up group from: %s", group_key)
@@ -382,13 +419,27 @@ def post_reboot_state(con, consul_lock, hostname, flags, wait_until_healthy, tas
 
     LOG.info("Entering post reboot state")
 
-    check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_postboot"], wait_until_healthy)
+    check_consul_services(
+        con,
+        hostname,
+        flags.get("ignore_failed_checks"),
+        ["rebootmgr", "rebootmgr_postboot"],
+        wait_until_healthy,
+    )
     run_tasks("post_boot", con, hostname, flags.get("dryrun"), task_timeout, group)
-    check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_postboot"], wait_until_healthy)
+    check_consul_services(
+        con,
+        hostname,
+        flags.get("ignore_failed_checks"),
+        ["rebootmgr", "rebootmgr_postboot"],
+        wait_until_healthy,
+    )
 
     if prometheus_server_domain:
         try:
-            wait_for_critical_alerts(con, consul_lock, hostname, group_key, prometheus_server_domain)
+            wait_for_critical_alerts(
+                con, consul_lock, hostname, group_key, prometheus_server_domain
+            )
         except TimeoutError as e:
             LOG.error(f"Error waiting for critical alerts to be gone: {e}")
             sys.exit(EXIT_CRITICAL_ALERTS_STILL_ACTIVE)
@@ -417,7 +468,12 @@ def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout, group):
 
     LOG.info("Entering pre reboot state")
 
-    check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_preboot"])
+    check_consul_services(
+        con,
+        hostname,
+        flags.get("ignore_failed_checks"),
+        ["rebootmgr", "rebootmgr_preboot"],
+    )
 
     LOG.info("Executing pre reboot tasks")
     run_tasks("pre_boot", con, hostname, flags.get("dryrun"), task_timeout, group)
@@ -427,7 +483,12 @@ def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout, group):
         time.sleep((60 * 2) + 10)
 
     check_consul_cluster(con, flags.get("ignore_failed_checks"))
-    check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_preboot"])
+    check_consul_services(
+        con,
+        hostname,
+        flags.get("ignore_failed_checks"),
+        ["rebootmgr", "rebootmgr_preboot"],
+    )
 
     if not consul_lock.acquired:
         LOG.error("Lost consul lock. Exit")
@@ -474,9 +535,9 @@ def get_config(con, hostname) -> dict:
 
 
 def maybe_migrate_config(con, hostname, config):
-    if 'disabled' in config and 'enabled' not in config:
-        config['enabled'] = not config['disabled']
-        del config['disabled']
+    if "disabled" in config and "enabled" not in config:
+        config["enabled"] = not config["disabled"]
+        del config["disabled"]
         put_config(con, hostname, config)
 
 
@@ -492,7 +553,7 @@ def config_is_present_and_valid(con, hostname) -> bool:
     the rebootmgr should consider itself disabled.
     """
     config = get_config(con, hostname)
-    if 'enabled' not in config:
+    if "enabled" not in config:
         return False
 
     return True
@@ -516,14 +577,19 @@ def ensure_configuration(con, hostname, dryrun) -> bool:
 
 
 def getuser():
-    user = os.environ.get('SUDO_USER')
+    user = os.environ.get("SUDO_USER")
     return user or getpass.getuser()
 
 
 def do_set_global_stop_flag(con, dc, hostname, stop_reason):
-    reason = "Set by " + getuser()\
-             + ", " + str(datetime.datetime.now())\
-             + ", stop reason: " + stop_reason
+    reason = (
+        "Set by "
+        + getuser()
+        + ", "
+        + str(datetime.datetime.now())
+        + ", stop reason: "
+        + stop_reason
+    )
     con.kv.put("service/rebootmgr/stop", reason, dc=dc)
     LOG.warning("Set %s global stop flag: %s", dc, reason)
 
@@ -534,9 +600,14 @@ def do_unset_global_stop_flag(con, dc):
 
 
 def do_set_local_stop_flag(con, hostname, stop_reason):
-    reason = "Node disabled by " + getuser()\
-             + ", " + str(datetime.datetime.now())\
-             + ", stop reason: " + stop_reason
+    reason = (
+        "Node disabled by "
+        + getuser()
+        + ", "
+        + str(datetime.datetime.now())
+        + ", stop reason: "
+        + stop_reason
+    )
     config = get_config(con, hostname)
     config["enabled"] = False
     config["message"] = reason
@@ -553,39 +624,137 @@ def do_unset_local_stop_flag(con, hostname, maintenance_reason, stop_reason):
 
 
 @click.command()
-@click.option("-v", "--verbose", count=True, help="Once for INFO logging, twice for DEBUG")
-@click.option("--check-triggers", help="Only reboot if a reboot is necessary", is_flag=True)
-@click.option("-n", "--dryrun", help="Run tasks and check services but don't reboot", is_flag=True)
-@click.option("-u", "--check-uptime", help="Make sure, that the uptime is less than 2 hours.", is_flag=True)
-@click.option("-s", "--ignore-stop-flag", help="ignore the related stop flag (example service/rebootmgr/ceph_stop).", is_flag=True)
+@click.option(
+    "-v", "--verbose", count=True, help="Once for INFO logging, twice for DEBUG"
+)
+@click.option(
+    "--check-triggers", help="Only reboot if a reboot is necessary", is_flag=True
+)
+@click.option(
+    "-n", "--dryrun", help="Run tasks and check services but don't reboot", is_flag=True
+)
+@click.option(
+    "-u",
+    "--check-uptime",
+    help="Make sure, that the uptime is less than 2 hours.",
+    is_flag=True,
+)
+@click.option(
+    "-s",
+    "--ignore-stop-flag",
+    help="ignore the related stop flag (example service/rebootmgr/ceph_stop).",
+    is_flag=True,
+)
 @click.option("--check-holidays", help="Don't reboot on holidays", is_flag=True)
-@click.option("--post-reboot-wait-until-healthy", help="Wait until healthy in post reboot, instead of exit", is_flag=True)
-@click.option("--lazy-consul-checks", help="Don't repeat consul checks after two minutes", is_flag=True)
-@click.option("-l", "--ignore-node-disabled", help="ignore the node specific stop flag (service/rebootmgr/hostname/config)", is_flag=True)
-@click.option("--ignore-failed-checks", help="Reboot even if consul checks fail", is_flag=True)
-@click.option("--maintenance-reason", help="""Reason for the downtime in consul. If the text starts with "reboot", """ +
-              "a 15 minute maintenance period is scheduled in zabbix\nDefault: reboot by rebootmgr",
-              default="reboot by rebootmgr")
-@click.option("--consul", metavar="CONSUL_IP_ADDR", help="Address of Consul. Default env REBOOTMGR_CONSUL_ADDR or 127.0.0.1.",
-              default=os.environ.get("REBOOTMGR_CONSUL_ADDR", "127.0.0.1"))
-@click.option("--consul-port", help="Port of Consul. Default env REBOOTMGR_CONSUL_PORT or 8500",
-              default=os.environ.get("REBOOTMGR_CONSUL_PORT", 8500))
-@click.option("--ensure-config", help="If there is no valid configuration in consul, create a default one.", is_flag=True)
-@click.option("--set-global-stop-flag", metavar="CLUSTER", help="Stop the rebootmgr cluster-wide in the specified cluster")
-@click.option("--unset-global-stop-flag", metavar="CLUSTER", help="Remove the cluster-wide stop flag in the specified cluster")
-@click.option("--set-local-stop-flag", help="Stop the rebootmgr on this node", is_flag=True)
-@click.option("--unset-local-stop-flag", help="Remove the stop flag on this node", is_flag=True)
-@click.option("--stop-reason", help="Reason to set the stop flag", default="stopped by rebootmgr")
-@click.option("--skip-reboot-in-progress-key", help="Don't set the reboot_in_progress consul key before rebooting", is_flag=True)
-@click.option("--task-timeout", help="Minutes that rebootmgr waits for each task to finish. Default are 120 minutes", default=120, type=int)
-@click.option("--group", help="Group name this host belongs to in our infrastructure", default="", type=str)
+@click.option(
+    "--post-reboot-wait-until-healthy",
+    help="Wait until healthy in post reboot, instead of exit",
+    is_flag=True,
+)
+@click.option(
+    "--lazy-consul-checks",
+    help="Don't repeat consul checks after two minutes",
+    is_flag=True,
+)
+@click.option(
+    "-l",
+    "--ignore-node-disabled",
+    help="ignore the node specific stop flag (service/rebootmgr/hostname/config)",
+    is_flag=True,
+)
+@click.option(
+    "--ignore-failed-checks", help="Reboot even if consul checks fail", is_flag=True
+)
+@click.option(
+    "--maintenance-reason",
+    help="""Reason for the downtime in consul. If the text starts with "reboot", """
+    + "a 15 minute maintenance period is scheduled in zabbix\nDefault: reboot by rebootmgr",
+    default="reboot by rebootmgr",
+)
+@click.option(
+    "--consul",
+    metavar="CONSUL_IP_ADDR",
+    help="Address of Consul. Default env REBOOTMGR_CONSUL_ADDR or 127.0.0.1.",
+    default=os.environ.get("REBOOTMGR_CONSUL_ADDR", "127.0.0.1"),
+)
+@click.option(
+    "--consul-port",
+    help="Port of Consul. Default env REBOOTMGR_CONSUL_PORT or 8500",
+    default=os.environ.get("REBOOTMGR_CONSUL_PORT", 8500),
+)
+@click.option(
+    "--ensure-config",
+    help="If there is no valid configuration in consul, create a default one.",
+    is_flag=True,
+)
+@click.option(
+    "--set-global-stop-flag",
+    metavar="CLUSTER",
+    help="Stop the rebootmgr cluster-wide in the specified cluster",
+)
+@click.option(
+    "--unset-global-stop-flag",
+    metavar="CLUSTER",
+    help="Remove the cluster-wide stop flag in the specified cluster",
+)
+@click.option(
+    "--set-local-stop-flag", help="Stop the rebootmgr on this node", is_flag=True
+)
+@click.option(
+    "--unset-local-stop-flag", help="Remove the stop flag on this node", is_flag=True
+)
+@click.option(
+    "--stop-reason", help="Reason to set the stop flag", default="stopped by rebootmgr"
+)
+@click.option(
+    "--skip-reboot-in-progress-key",
+    help="Don't set the reboot_in_progress consul key before rebooting",
+    is_flag=True,
+)
+@click.option(
+    "--task-timeout",
+    help="Minutes that rebootmgr waits for each task to finish. Default are 120 minutes",
+    default=120,
+    type=int,
+)
+@click.option(
+    "--group",
+    help="Group name this host belongs to in our infrastructure",
+    default="",
+    type=str,
+)
 @click.version_option()
-@click.option("--prometheus-server", metavar="PROMETHEUS_SERVER", help="Domain of Prometheus Server. Default env PROMETHEUS_SERVER",
-              default=os.environ.get("PROMETHEUS_SERVER"))
-def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, maintenance_reason, ignore_stop_flag,
-        ignore_node_disabled, ignore_failed_checks, check_holidays, post_reboot_wait_until_healthy, lazy_consul_checks,
-        ensure_config, set_global_stop_flag, unset_global_stop_flag, set_local_stop_flag, unset_local_stop_flag, stop_reason,
-        skip_reboot_in_progress_key, task_timeout, group, prometheus_server):
+@click.option(
+    "--prometheus-server",
+    metavar="PROMETHEUS_SERVER",
+    help="Domain of Prometheus Server. Default env PROMETHEUS_SERVER",
+    default=os.environ.get("PROMETHEUS_SERVER"),
+)
+def cli(
+    verbose,
+    consul,
+    consul_port,
+    check_triggers,
+    check_uptime,
+    dryrun,
+    maintenance_reason,
+    ignore_stop_flag,
+    ignore_node_disabled,
+    ignore_failed_checks,
+    check_holidays,
+    post_reboot_wait_until_healthy,
+    lazy_consul_checks,
+    ensure_config,
+    set_global_stop_flag,
+    unset_global_stop_flag,
+    set_local_stop_flag,
+    unset_local_stop_flag,
+    stop_reason,
+    skip_reboot_in_progress_key,
+    task_timeout,
+    group,
+    prometheus_server,
+):
     """Reboot Manager
 
     Default values of parameteres are environment variables (if set)
@@ -597,11 +766,15 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
 
     if ensure_config:
         if ensure_configuration(con, hostname, dryrun):
-            LOG.warning("Created default configuration, "
-                        "since it was missing or invalid. Exit.")
+            LOG.warning(
+                "Created default configuration, "
+                "since it was missing or invalid. Exit."
+            )
         else:
-            LOG.debug("Did not create default configuration, "
-                      "since there already was one. Exit.")
+            LOG.debug(
+                "Did not create default configuration, "
+                "since there already was one. Exit."
+            )
         sys.exit(0)
 
     if set_global_stop_flag:
@@ -621,22 +794,26 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
         sys.exit(0)
 
     if not config_is_present_and_valid(con, hostname):
-        LOG.error("The configuration of this node (%s) seems to be missing. "
-                  "Exit." % hostname)
+        LOG.error(
+            "The configuration of this node (%s) seems to be missing. "
+            "Exit." % hostname
+        )
         sys.exit(EXIT_CONFIGURATION_IS_MISSING)
 
-    flags = {"check_triggers": check_triggers,
-             "check_uptime": check_uptime,
-             "dryrun": dryrun,
-             "maintenance_reason": maintenance_reason,
-             "ignore_stop_flag": ignore_stop_flag,
-             "ignore_node_disabled": ignore_node_disabled,
-             "ignore_failed_checks": ignore_failed_checks,
-             "check_holidays": check_holidays,
-             "lazy_consul_checks": lazy_consul_checks,
-             "skip_reboot_in_progress_key": skip_reboot_in_progress_key,
-             "group": group,
-             "prometheus_server": prometheus_server}
+    flags = {
+        "check_triggers": check_triggers,
+        "check_uptime": check_uptime,
+        "dryrun": dryrun,
+        "maintenance_reason": maintenance_reason,
+        "ignore_stop_flag": ignore_stop_flag,
+        "ignore_node_disabled": ignore_node_disabled,
+        "ignore_failed_checks": ignore_failed_checks,
+        "check_holidays": check_holidays,
+        "lazy_consul_checks": lazy_consul_checks,
+        "skip_reboot_in_progress_key": skip_reboot_in_progress_key,
+        "group": group,
+        "prometheus_server": prometheus_server,
+    }
 
     check_consul_cluster(con, ignore_failed_checks)
 
@@ -663,7 +840,15 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
         if reboot_in_progress:
             if reboot_in_progress.startswith(hostname):
                 # We are in post_reboot state
-                post_reboot_state(con, consul_lock, hostname, flags, post_reboot_wait_until_healthy, task_timeout, group)
+                post_reboot_state(
+                    con,
+                    consul_lock,
+                    hostname,
+                    flags,
+                    post_reboot_wait_until_healthy,
+                    task_timeout,
+                    group,
+                )
                 sys.exit(0)
             # Another node has the lock
             else:

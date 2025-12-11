@@ -13,9 +13,17 @@ def test_reboot_not_required(run_cli, forward_consul_port, default_config, reboo
 
 
 def test_reboot_required_because_consul(
-        run_cli, forward_consul_port, consul_cluster, default_config,
-        reboot_task, mock_subprocess_run, mocker):
-    consul_cluster[0].kv.put("service/rebootmgr/nodes/%s/reboot_required" % socket.gethostname(), "")
+    run_cli,
+    forward_consul_port,
+    consul_cluster,
+    default_config,
+    reboot_task,
+    mock_subprocess_run,
+    mocker,
+):
+    consul_cluster[0].kv.put(
+        "service/rebootmgr/nodes/%s/reboot_required" % socket.gethostname(), ""
+    )
 
     mocked_sleep = mocker.patch("time.sleep")
     mocked_popen = mocker.patch("subprocess.Popen")
@@ -31,13 +39,23 @@ def test_reboot_required_because_consul(
 
 
 def test_reboot_required_because_consul_but_removed_after_sleep(
-        run_cli, forward_consul_port, consul_cluster, default_config,
-        reboot_task, mock_subprocess_run, mocker):
-    consul_cluster[0].kv.put("service/rebootmgr/nodes/%s/reboot_required" % socket.gethostname(), "")
+    run_cli,
+    forward_consul_port,
+    consul_cluster,
+    default_config,
+    reboot_task,
+    mock_subprocess_run,
+    mocker,
+):
+    consul_cluster[0].kv.put(
+        "service/rebootmgr/nodes/%s/reboot_required" % socket.gethostname(), ""
+    )
 
     def remove_reboot_required(seconds):
         if seconds == 130:
-            consul_cluster[0].kv.delete("service/rebootmgr/nodes/%s/reboot_required" % socket.gethostname())
+            consul_cluster[0].kv.delete(
+                "service/rebootmgr/nodes/%s/reboot_required" % socket.gethostname()
+            )
 
     mocked_sleep = mocker.patch("time.sleep", side_effect=remove_reboot_required)
     mocked_popen = mocker.patch("subprocess.Popen")
@@ -53,8 +71,13 @@ def test_reboot_required_because_consul_but_removed_after_sleep(
 
 
 def test_reboot_required_because_file(
-        run_cli, forward_consul_port, default_config, reboot_task,
-        mock_subprocess_run, mocker):
+    run_cli,
+    forward_consul_port,
+    default_config,
+    reboot_task,
+    mock_subprocess_run,
+    mocker,
+):
     mocked_sleep = mocker.patch("time.sleep")
     mocked_popen = mocker.patch("subprocess.Popen")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
@@ -70,8 +93,13 @@ def test_reboot_required_because_file(
 
 
 def test_reboot_required_because_file_but_removed_after_sleep(
-        run_cli, forward_consul_port, default_config, reboot_task,
-        mock_subprocess_run, mocker):
+    run_cli,
+    forward_consul_port,
+    default_config,
+    reboot_task,
+    mock_subprocess_run,
+    mocker,
+):
     reboot_required_file_is_present = True
 
     def remove_file(seconds):
@@ -80,8 +108,7 @@ def test_reboot_required_because_file_but_removed_after_sleep(
             reboot_required_file_is_present = False
 
     def new_isfile(f):
-        return reboot_required_file_is_present and \
-               f == "/var/run/reboot-required"
+        return reboot_required_file_is_present and f == "/var/run/reboot-required"
 
     mocked_sleep = mocker.patch("time.sleep", side_effect=remove_file)
     mocked_popen = mocker.patch("subprocess.Popen")
@@ -98,8 +125,13 @@ def test_reboot_required_because_file_but_removed_after_sleep(
 
 
 def test_reboot_on_holiday(
-        run_cli, forward_consul_port, default_config, reboot_task,
-        mock_subprocess_run, mocker):
+    run_cli,
+    forward_consul_port,
+    default_config,
+    reboot_task,
+    mock_subprocess_run,
+    mocker,
+):
     mocker.patch("time.sleep")
     mocked_popen = mocker.patch("subprocess.Popen")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
@@ -117,8 +149,13 @@ def test_reboot_on_holiday(
 
 
 def test_reboot_on_not_a_holiday(
-        run_cli, forward_consul_port, default_config, reboot_task,
-        mock_subprocess_run, mocker):
+    run_cli,
+    forward_consul_port,
+    default_config,
+    reboot_task,
+    mock_subprocess_run,
+    mocker,
+):
     mocked_sleep = mocker.patch("time.sleep")
     mocked_popen = mocker.patch("subprocess.Popen")
     mocked_run = mock_subprocess_run(["shutdown", "-r", "+1"])
@@ -135,9 +172,17 @@ def test_reboot_on_not_a_holiday(
 
 
 def test_reboot_when_node_disabled(
-        run_cli, forward_consul_port, consul_cluster, reboot_task,
-        mock_subprocess_run, mocker):
-    consul_cluster[0].kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"enabled": false}')
+    run_cli,
+    forward_consul_port,
+    consul_cluster,
+    reboot_task,
+    mock_subprocess_run,
+    mocker,
+):
+    consul_cluster[0].kv.put(
+        "service/rebootmgr/nodes/{}/config".format(socket.gethostname()),
+        '{"enabled": false}',
+    )
 
     mocker.patch("time.sleep")
     mocked_popen = mocker.patch("subprocess.Popen")
@@ -152,9 +197,17 @@ def test_reboot_when_node_disabled(
 
 
 def test_reboot_when_node_disabled_but_ignored(
-        run_cli, forward_consul_port, consul_cluster, reboot_task,
-        mock_subprocess_run, mocker):
-    consul_cluster[0].kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"enabled": false}')
+    run_cli,
+    forward_consul_port,
+    consul_cluster,
+    reboot_task,
+    mock_subprocess_run,
+    mocker,
+):
+    consul_cluster[0].kv.put(
+        "service/rebootmgr/nodes/{}/config".format(socket.gethostname()),
+        '{"enabled": false}',
+    )
 
     mocked_sleep = mocker.patch("time.sleep")
     mocked_popen = mocker.patch("subprocess.Popen")
@@ -168,17 +221,27 @@ def test_reboot_when_node_disabled_but_ignored(
     assert "Reboot now ..." in result.output
     assert result.exit_code == 0
 
+
 # TODO(oseibert): Should a MISSING configuration also be ignored with --ignore-node-disabled?
 
 
 # TODO(oseibert): Fix this bug.
 @pytest.mark.xfail
 def test_reboot_when_node_disabled_after_sleep(
-        run_cli, forward_consul_port, consul_cluster, default_config,
-        reboot_task, mock_subprocess_run, mocker):
+    run_cli,
+    forward_consul_port,
+    consul_cluster,
+    default_config,
+    reboot_task,
+    mock_subprocess_run,
+    mocker,
+):
     def set_configuration_disabled(seconds):
         if seconds == 130:
-            consul_cluster[0].kv.put("service/rebootmgr/nodes/{}/config".format(socket.gethostname()), '{"enabled": false}')
+            consul_cluster[0].kv.put(
+                "service/rebootmgr/nodes/{}/config".format(socket.gethostname()),
+                '{"enabled": false}',
+            )
 
     # When rebootmgr sleeps for 2 minutes, the stop flag will be set.
     mocked_sleep = mocker.patch("time.sleep", side_effect=set_configuration_disabled)
@@ -194,8 +257,14 @@ def test_reboot_when_node_disabled_after_sleep(
 
 
 def test_reboot_when_global_stop_flag(
-        run_cli, forward_consul_port, consul_cluster, default_config,
-        reboot_task, mock_subprocess_run, mocker):
+    run_cli,
+    forward_consul_port,
+    consul_cluster,
+    default_config,
+    reboot_task,
+    mock_subprocess_run,
+    mocker,
+):
     consul_cluster[0].kv.put("service/rebootmgr/stop", "")
 
     mocker.patch("time.sleep")
@@ -211,8 +280,14 @@ def test_reboot_when_global_stop_flag(
 
 
 def test_reboot_when_global_stop_flag_after_sleep(
-        run_cli, forward_consul_port, consul_cluster, default_config,
-        reboot_task, mock_subprocess_run, mocker):
+    run_cli,
+    forward_consul_port,
+    consul_cluster,
+    default_config,
+    reboot_task,
+    mock_subprocess_run,
+    mocker,
+):
     def set_stop_flag(seconds):
         if seconds == 130:
             consul_cluster[0].kv.put("service/rebootmgr/stop", "")
@@ -232,8 +307,14 @@ def test_reboot_when_global_stop_flag_after_sleep(
 
 
 def test_reboot_when_global_stop_flag_when_ignored(
-        run_cli, forward_consul_port, consul_cluster, default_config,
-        reboot_task, mock_subprocess_run, mocker):
+    run_cli,
+    forward_consul_port,
+    consul_cluster,
+    default_config,
+    reboot_task,
+    mock_subprocess_run,
+    mocker,
+):
     consul_cluster[0].kv.put("service/rebootmgr/stop", "")
 
     mocked_sleep = mocker.patch("time.sleep")
@@ -250,8 +331,14 @@ def test_reboot_when_global_stop_flag_when_ignored(
 
 
 def test_reboot_when_global_stop_flag_after_sleep_when_ignored(
-        run_cli, forward_consul_port, consul_cluster, default_config,
-        reboot_task, mock_subprocess_run, mocker):
+    run_cli,
+    forward_consul_port,
+    consul_cluster,
+    default_config,
+    reboot_task,
+    mock_subprocess_run,
+    mocker,
+):
     def set_stop_flag(seconds):
         if seconds == 130:
             consul_cluster[0].kv.put("service/rebootmgr/stop", "")

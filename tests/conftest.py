@@ -11,14 +11,15 @@ from unittest.mock import MagicMock
 import pytest
 import consul
 
+
 @pytest.fixture
 def consul_cluster(mocker):
     clients = [consul.Consul(host="consul{}".format(i + 1)) for i in range(4)]
 
     while not clients[0].status.leader():
-        time.sleep(.1)
+        time.sleep(0.1)
 
-    snapshot_url = 'http://consul1:8500/v1/snapshot'
+    snapshot_url = "http://consul1:8500/v1/snapshot"
     snapshot = requests.get(snapshot_url, allow_redirects=False)
     snapshot.raise_for_status()
 
@@ -26,7 +27,7 @@ def consul_cluster(mocker):
     def fake_gethostname():
         return "consul1"
 
-    mocker.patch('socket.gethostname', new=fake_gethostname)
+    mocker.patch("socket.gethostname", new=fake_gethostname)
 
     try:
         yield clients
@@ -164,10 +165,14 @@ def reboot_task(mocker, mock_subprocess_popen):
             return tasks["post_boot"]
         else:
             raise FileNotFoundError
+
     mocker.patch("os.listdir", new=listdir)
 
     def create_task(tasktype, filename, exit_code=0, raise_timeout_expired=False):
-        assert tasktype in ["pre_boot", "post_boot"], "task type must be either pre_boot or post_boot"
+        assert tasktype in [
+            "pre_boot",
+            "post_boot",
+        ], "task type must be either pre_boot or post_boot"
 
         tasks[tasktype] += [filename]
 
@@ -181,7 +186,8 @@ def reboot_task(mocker, mock_subprocess_popen):
         return mock_subprocess_popen(
             ["/etc/rebootmgr/{}_tasks/{}".format(tasktype, filename)],
             wait_return_value=return_value,
-            wait_side_effect=side_effect)
+            wait_side_effect=side_effect,
+        )
 
     return create_task
 
@@ -224,6 +230,7 @@ class _PortForwardingFixture:
     """
     See the `forward_port` fixture for an explanation and an example.
     """
+
     def __init__(self):
         self.forwarders = []
 
@@ -240,7 +247,7 @@ class _PortForwardingFixture:
             forwarder.stop()
 
 
-class _TCPPortForwarder():
+class _TCPPortForwarder:
     """
     Forward TCP port using socat under the hood.
 
@@ -248,6 +255,7 @@ class _TCPPortForwarder():
 
     This is known to be a hack; usinfg socat was the simplest and most reliable solution I found.
     """
+
     def __init__(self, listen_port, forward_host, forward_port):
         self.listen_port = listen_port
         self.forward_host = forward_host
@@ -255,11 +263,13 @@ class _TCPPortForwarder():
         self.process = None
 
     def start(self):
-        self.process = subprocess.Popen([
-             "socat",
-             "tcp-listen:{},reuseaddr,fork".format(self.listen_port),
-             "tcp:{}:{}".format(self.forward_host, self.forward_port)
-        ])
+        self.process = subprocess.Popen(
+            [
+                "socat",
+                "tcp-listen:{},reuseaddr,fork".format(self.listen_port),
+                "tcp:{}:{}".format(self.forward_host, self.forward_port),
+            ]
+        )
         # XXX(sneubauer): Dirty fix for race condition, where socat is not ready yet when test runs.
         time.sleep(0.05)
 

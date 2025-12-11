@@ -8,21 +8,31 @@ import socket
 def test_ensure_config_when_already_valid(run_cli, forward_consul_port, default_config):
     result = run_cli(rebootmgr, ["-vv", "--ensure-config"])
 
-    assert "Did not create default configuration, since there already was one." in result.output
+    assert (
+        "Did not create default configuration, since there already was one."
+        in result.output
+    )
     assert result.exit_code == 0
 
 
 def test_ensure_config_when_old_style_config_present(
-        run_cli, forward_consul_port, consul_cluster):
+    run_cli, forward_consul_port, consul_cluster
+):
     hostname = socket.gethostname()
-    consul_cluster[0].kv.put("service/rebootmgr/nodes/%s/config" % hostname, '{"disabled": false}')
+    consul_cluster[0].kv.put(
+        "service/rebootmgr/nodes/%s/config" % hostname, '{"disabled": false}'
+    )
 
     result = run_cli(rebootmgr, ["-vv", "--ensure-config"])
 
-    assert "Did not create default configuration, since there already was one." in result.output
+    assert (
+        "Did not create default configuration, since there already was one."
+        in result.output
+    )
 
-    _, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(
-        hostname))
+    _, data = consul_cluster[0].kv.get(
+        "service/rebootmgr/nodes/{}/config".format(hostname)
+    )
     assert json.loads(data["Value"].decode()) == {
         "enabled": True,
     }
@@ -30,25 +40,33 @@ def test_ensure_config_when_old_style_config_present(
     assert result.exit_code == 0
 
 
-@pytest.mark.parametrize("bad_config",
-                         [None, '', '{}', 'disabled', '{"somekey": false}'])
-def test_ensure_config_when_invalid(run_cli, forward_consul_port,
-                                    consul_cluster, bad_config):
+@pytest.mark.parametrize(
+    "bad_config", [None, "", "{}", "disabled", '{"somekey": false}']
+)
+def test_ensure_config_when_invalid(
+    run_cli, forward_consul_port, consul_cluster, bad_config
+):
     hostname = socket.gethostname()
     if bad_config is None:
         consul_cluster[0].kv.delete("service/rebootmgr/nodes/%s/config" % hostname)
     else:
-        consul_cluster[0].kv.put("service/rebootmgr/nodes/%s/config" % hostname, bad_config)
+        consul_cluster[0].kv.put(
+            "service/rebootmgr/nodes/%s/config" % hostname, bad_config
+        )
 
     result = run_cli(rebootmgr, ["-v", "--ensure-config"])
 
-    assert "Created default configuration, since it was missing or invalid." in result.output
+    assert (
+        "Created default configuration, since it was missing or invalid."
+        in result.output
+    )
 
-    _, data = consul_cluster[0].kv.get("service/rebootmgr/nodes/{}/config".format(
-        hostname))
+    _, data = consul_cluster[0].kv.get(
+        "service/rebootmgr/nodes/{}/config".format(hostname)
+    )
     assert json.loads(data["Value"].decode()) == {
         "enabled": True,
-        "message": "Default config created"
+        "message": "Default config created",
     }
 
     assert result.exit_code == 0

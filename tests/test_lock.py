@@ -5,7 +5,8 @@ from consul_lib import Lock
 
 
 def test_consul_lock_fails(
-        run_cli, forward_consul_port, consul_cluster, default_config):
+    run_cli, forward_consul_port, consul_cluster, default_config
+):
     with Lock(consul_cluster[0], "service/rebootmgr/lock"):
         result = run_cli(rebootmgr, ["-v"], catch_exceptions=True)
 
@@ -14,13 +15,13 @@ def test_consul_lock_fails(
 
 
 def test_consul_lock_fails_later(
-        run_cli, forward_consul_port, consul_cluster, default_config,
-        reboot_task, mocker):
+    run_cli, forward_consul_port, consul_cluster, default_config, reboot_task, mocker
+):
     mocked_sleep = mocker.patch("time.sleep")
     # Lock.acquired is called only once, after the sleep period.
-    mocker.patch("consul_lib.lock.Lock.acquired",
-                 new_callable=PropertyMock,
-                 return_value=False)
+    mocker.patch(
+        "consul_lib.lock.Lock.acquired", new_callable=PropertyMock, return_value=False
+    )
 
     result = run_cli(rebootmgr, ["-v"], catch_exceptions=True)
 
