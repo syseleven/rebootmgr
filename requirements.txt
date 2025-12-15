@@ -1,5 +1,5 @@
 click==8.0.4
-colorlog==6.7.0
+colorlog==6.10.1
 python-consul>=0.7.1
 requests==2.27.1
 urllib3==1.26.16
