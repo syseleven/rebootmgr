@@ -29,6 +29,7 @@ EXIT_CONSUL_NODE_FAILED = 3
 EXIT_CONSUL_LOCK_FAILED = 4
 EXIT_CONSUL_LOST_LOCK = 5
 EXIT_HOLIDAY = 6
+EXIT_STOP_FLAG_FAILED = 7
 
 # exit codes >= 100 are permanent
 EXIT_TASK_FAILED = 100
@@ -54,6 +55,20 @@ def logsetup(verbosity):
 
     LOG.info("Verbose logging enabled")
     LOG.debug("Debug logging enabled")
+
+
+def fire_chat_escalation(con, hostname, message, group=None):
+    """Fire a consul event to escalate a failure to chat.
+
+    Format: (hostname) (group) message
+    """
+    hostname_str = f"({hostname}) " if hostname else ""
+    group_str = f"({group}) " if group else ""
+    body = f"{hostname_str}{group_str}{message}"
+    try:
+        con.event.fire("chat_escalation", body)
+    except Exception as e:
+        LOG.error("Failed to fire chat_escalation event: %s", e)
 
 
 def run_tasks(tasktype, con, hostname, dryrun, task_timeout, group):
@@ -83,16 +98,20 @@ def run_tasks(tasktype, con, hostname, dryrun, task_timeout, group):
                 p.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 p.kill()
-            LOG.error("Could not finish task %s in %i minutes. Exit" % (task, task_timeout))
+            message = "Could not finish task %s in %i minutes" % (task, task_timeout)
+            LOG.error("%s. Exit" % message)
             LOG.error("Disable rebootmgr in consul for this node")
             data = get_config(con, hostname)
             data["enabled"] = False
-            data["message"] = "Could not finish task %s in %i minutes" % (task, task_timeout)
+            data["message"] = message
             put_config(con, hostname, data)
             con.kv.delete(group_key)
+            fire_chat_escalation(con, hostname, message, resolve_group_name(con, group, hostname))
             sys.exit(EXIT_TASK_FAILED)
         if ret != 0:
-            LOG.error("Task %s failed with return code %s. Exit" % (task, ret))
+            message = "Task %s failed with return code %s" % (task, ret)
+            LOG.error("%s. Exit" % message)
+            fire_chat_escalation(con, hostname, message, resolve_group_name(con, group, hostname))
             sys.exit(EXIT_TASK_FAILED)
         LOG.info("task %s finished" % task)
 
@@ -148,85 +167,73 @@ def check_consul_services(con, hostname, ignore_failed_checks: bool, tags: List[
             LOG.info("All consul checks passed.")
 
 
+def resolve_group_name(con, group, hostname):
+    """
+    Resolve the group name for this node.
+
+    Priority:
+    1. Use explicit group if provided.
+    2. Use hostname-based group from config.
+    3. Return None if no group is configured.
+    """
+    if group:
+        return group
+    config = get_config(con, hostname)
+    return config.get('group')
+
+
 def resolve_group_key(con, group, hostname):
     """
     Resolve the correct reboot status key from Consul KV store.
 
-    Priority:
+    Group resolution is delegated to resolve_group_name:
     1. Use explicit group if provided.
-    2. Use hostname-based group key.
+    2. Use hostname-based group from config.
     3. Fallback to default key.
 
     Returns:
         Full key path as string.
     """
-    config = get_config(con, hostname)
-    if group:
-        key = f"service/rebootmgr/{group}_reboot_in_progress"
-        return key
-
-    group_key_name = config.get('group')
-    if group_key_name:
-        key = f"service/rebootmgr/{group_key_name}_reboot_in_progress"
-        return key
-
-    # Fallback
-    key = "service/rebootmgr/reboot_in_progress"
-    return key
+    group_name = resolve_group_name(con, group, hostname)
+    if group_name:
+        return f"service/rebootmgr/{group_name}_reboot_in_progress"
+    return "service/rebootmgr/reboot_in_progress"
 
 
 def resolve_stop_flag(con, group, hostname):
     """
     Resolve the correct stop flag from Consul KV store.
 
-    Priority:
+    Group resolution is delegated to resolve_group_name:
     1. Use explicit group if provided.
-    2. Use hostname-based group key.
+    2. Use hostname-based group from config.
     3. Fallback to default key.
 
     Returns:
         Full key path as string.
     """
-    config = get_config(con, hostname)
-    if group:
-        key = f"service/rebootmgr/{group}_stop"
-        return key
-
-    group_key_name = config.get('group')
-    if group_key_name:
-        key = f"service/rebootmgr/{group_key_name}_stop"
-        return key
-
-    # Fallback
-    key = "service/rebootmgr/stop"
-    return key
+    group_name = resolve_group_name(con, group, hostname)
+    if group_name:
+        return f"service/rebootmgr/{group_name}_stop"
+    return "service/rebootmgr/stop"
 
 
 def resolve_lock(con, group, hostname):
     """
-    Resolve the correct lock flag from Consul KV store.
+    Resolve the correct lock key from Consul KV store.
 
-    Priority:
+    Group resolution is delegated to resolve_group_name:
     1. Use explicit group if provided.
-    2. Use hostname-based group key.
+    2. Use hostname-based group from config.
     3. Fallback to default key.
 
     Returns:
         Full key path as string.
     """
-    config = get_config(con, hostname)
-    if group:
-        key = f"service/rebootmgr/{group}_lock"
-        return key
-
-    group_key_name = config.get('group')
-    if group_key_name:
-        key = f"service/rebootmgr/{group_key_name}_lock"
-        return key
-
-    # Fallback
-    key = "service/rebootmgr/lock"
-    return key
+    group_name = resolve_group_name(con, group, hostname)
+    if group_name:
+        return f"service/rebootmgr/{group_name}_lock"
+    return "service/rebootmgr/lock"
 
 
 @retry(wait_fixed=2000, stop_max_delay=20000)
@@ -336,6 +343,14 @@ def post_reboot_state(con, consul_lock, hostname, flags, wait_until_healthy, tas
     consul_lock.release()
 
 
+def _check_and_handle_stop_flag(con, group, hostname, flags):
+    """Check if stop flag is set and handle it appropriately."""
+    must_stop, stop_flag = check_stop_flag(con, group, hostname)
+    if must_stop and not flags.get("ignore_stop_flag"):
+        LOG.info("Stop flag is set: exit (%s)" % stop_flag)
+        sys.exit(EXIT_STOP_FLAG_SET)
+
+
 def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout, group):
     group_key = resolve_group_key(con, group, hostname)
     today = datetime.date.today()
@@ -343,10 +358,7 @@ def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout, group):
         LOG.info("Refuse to run on holiday")
         sys.exit(EXIT_HOLIDAY)
 
-    must_stop, stop_flag = check_stop_flag(con, group, hostname)
-    if must_stop and not flags.get("ignore_stop_flag"):
-        LOG.info("Stop flag is set: exit (%s)" % stop_flag)
-        sys.exit(EXIT_STOP_FLAG_SET)
+    _check_and_handle_stop_flag(con, group, hostname, flags)
 
     if is_node_disabled(con, hostname) and not flags.get("ignore_node_disabled"):
         LOG.info("Rebootmgr is disabled in consul config for this node. Exit")
@@ -373,12 +385,8 @@ def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout, group):
         LOG.error("Lost consul lock. Exit")
         sys.exit(EXIT_CONSUL_LOST_LOCK)
 
-    must_stop, stop_flag = check_stop_flag(con, group, hostname)
-    if must_stop and not flags.get("ignore_stop_flag"):
-        LOG.info("Stop flag is set: exit (%s)" % stop_flag)
-        sys.exit(EXIT_STOP_FLAG_SET)
+    _check_and_handle_stop_flag(con, group, hostname, flags)
 
-    # check again if reboot is still required
     if flags.get("check_triggers") and not is_reboot_required(con, hostname):
         sys.exit(0)
 
@@ -461,35 +469,64 @@ def getuser():
 
 
 def do_set_global_stop_flag(con, dc, hostname, stop_reason):
-    reason = "Set by " + getuser()\
-             + ", " + str(datetime.datetime.now())\
-             + ", stop reason: " + stop_reason
+    reason = f"Set by {getuser()}, {datetime.datetime.now()}, stop reason: {stop_reason}"
     con.kv.put("service/rebootmgr/stop", reason, dc=dc)
+    chat_reaseon = f"Set global stop flag, {reason} in dc: {dc}"
+    fire_chat_escalation(con, hostname, chat_reaseon, resolve_group_name(con, None, hostname))
     LOG.warning("Set %s global stop flag: %s", dc, reason)
 
 
 def do_unset_global_stop_flag(con, dc):
     con.kv.delete("service/rebootmgr/stop", dc=dc)
+    chat_reaseon = f"Unset global stop flag in dc: {dc}"
+    fire_chat_escalation(con, None, chat_reaseon)
     LOG.warning("Remove %s global stop flag", dc)
 
 
 def do_set_local_stop_flag(con, hostname, stop_reason):
-    reason = "Node disabled by " + getuser()\
-             + ", " + str(datetime.datetime.now())\
-             + ", stop reason: " + stop_reason
+    reason = f"Node disabled by {getuser()}, {datetime.datetime.now()}, stop reason: {stop_reason}"
     config = get_config(con, hostname)
     config["enabled"] = False
     config["message"] = reason
     put_config(con, hostname, config)
+    chat_reaseon = f"Set local stop flag, {reason}"
+    fire_chat_escalation(con, hostname, chat_reaseon, resolve_group_name(con, None, hostname))
     LOG.warning("Set %s local stop flag: %s", hostname, reason)
 
 
-def do_unset_local_stop_flag(con, hostname, maintenance_reason, stop_reason):
+def do_unset_local_stop_flag(con, hostname):
     config = get_config(con, hostname)
     config["enabled"] = True
     config["message"] = ""
     put_config(con, hostname, config)
+    chat_reaseon = "Unset local stop flag."
+    fire_chat_escalation(con, hostname, chat_reaseon, resolve_group_name(con, None, hostname))
     LOG.warning("Unset %s local stop flag", hostname)
+
+
+def do_set_group_stop_flag(con, group, hostname, stop_reason):
+    group_name = resolve_group_name(con, group, hostname)
+    if not group_name:
+        LOG.error("No group configured. Cannot set group stop flag.")
+        sys.exit(EXIT_STOP_FLAG_FAILED)
+    stop_flag_key = f"service/rebootmgr/{group_name}_stop"
+    reason = f"Set by {getuser()}, {datetime.datetime.now()}, stop reason: {stop_reason}"
+    con.kv.put(stop_flag_key, reason)
+    chat_reaseon = f"Set group stop flag, {reason} in consul key: {stop_flag_key}"
+    fire_chat_escalation(con, hostname, chat_reaseon, group_name)
+    LOG.warning("Set group '%s' stop flag: %s", group_name, reason)
+
+
+def do_unset_group_stop_flag(con, group, hostname):
+    group_name = resolve_group_name(con, group, hostname)
+    if not group_name:
+        LOG.error("No group configured. Cannot unset group stop flag.")
+        sys.exit(EXIT_STOP_FLAG_FAILED)
+    stop_flag_key = f"service/rebootmgr/{group_name}_stop"
+    con.kv.delete(stop_flag_key)
+    chat_reaseon = f"Unset group stop flag for consul key: {stop_flag_key}"
+    fire_chat_escalation(con, hostname, chat_reaseon, group_name)
+    LOG.warning("Remove group '%s' stop flag", group_name)
 
 
 @click.command()
@@ -513,6 +550,8 @@ def do_unset_local_stop_flag(con, hostname, maintenance_reason, stop_reason):
 @click.option("--ensure-config", help="If there is no valid configuration in consul, create a default one.", is_flag=True)
 @click.option("--set-global-stop-flag", metavar="CLUSTER", help="Stop the rebootmgr cluster-wide in the specified cluster")
 @click.option("--unset-global-stop-flag", metavar="CLUSTER", help="Remove the cluster-wide stop flag in the specified cluster")
+@click.option("--set-group-stop-flag", help="Stop the rebootmgr for this group (requires --group or group in node config)", is_flag=True)
+@click.option("--unset-group-stop-flag", help="Remove the group stop flag (requires --group or group in node config)", is_flag=True)
 @click.option("--set-local-stop-flag", help="Stop the rebootmgr on this node", is_flag=True)
 @click.option("--unset-local-stop-flag", help="Remove the stop flag on this node", is_flag=True)
 @click.option("--stop-reason", help="Reason to set the stop flag", default="stopped by rebootmgr")
@@ -522,7 +561,8 @@ def do_unset_local_stop_flag(con, hostname, maintenance_reason, stop_reason):
 @click.version_option()
 def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, maintenance_reason, ignore_stop_flag,
         ignore_node_disabled, ignore_failed_checks, check_holidays, post_reboot_wait_until_healthy, lazy_consul_checks,
-        ensure_config, set_global_stop_flag, unset_global_stop_flag, set_local_stop_flag, unset_local_stop_flag, stop_reason,
+        ensure_config, set_global_stop_flag, unset_global_stop_flag, set_group_stop_flag, unset_group_stop_flag,
+        set_local_stop_flag, unset_local_stop_flag, stop_reason,
         skip_reboot_in_progress_key, task_timeout, group):
     """Reboot Manager
 
@@ -542,21 +582,21 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
                       "since there already was one. Exit.")
         sys.exit(0)
 
-    if set_global_stop_flag:
-        do_set_global_stop_flag(con, set_global_stop_flag, hostname, stop_reason)
-        sys.exit(0)
+    # Map flags to their corresponding functions and arguments
+    stop_flag_actions = {
+        'set_global_stop_flag': (do_set_global_stop_flag, (con, set_global_stop_flag, hostname, stop_reason)),
+        'unset_global_stop_flag': (do_unset_global_stop_flag, (con, unset_global_stop_flag)),
+        'set_group_stop_flag': (do_set_group_stop_flag, (con, group, hostname, stop_reason)),
+        'unset_group_stop_flag': (do_unset_group_stop_flag, (con, group, hostname)),
+        'set_local_stop_flag': (do_set_local_stop_flag, (con, hostname, stop_reason)),
+        'unset_local_stop_flag': (do_unset_local_stop_flag, (con, hostname)),
+    }
 
-    if unset_global_stop_flag:
-        do_unset_global_stop_flag(con, unset_global_stop_flag)
-        sys.exit(0)
-
-    if set_local_stop_flag:
-        do_set_local_stop_flag(con, hostname, stop_reason)
-        sys.exit(0)
-
-    if unset_local_stop_flag:
-        do_unset_local_stop_flag(con, hostname, maintenance_reason, stop_reason)
-        sys.exit(0)
+    # Execute the first matching action
+    for flag_name, (func, args) in stop_flag_actions.items():
+        if locals()[flag_name]:
+            func(*args)
+            sys.exit(0)
 
     if not config_is_present_and_valid(con, hostname):
         LOG.error("The configuration of this node (%s) seems to be missing. "
