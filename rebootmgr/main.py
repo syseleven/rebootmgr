@@ -295,7 +295,56 @@ def uptime() -> float:
         return uptime
 
 
-def check_consul_cluster(con, ignore_failed_checks: bool) -> None:
+def get_all_node_groups(con):
+    index, items = con.kv.get("service/rebootmgr/nodes/", recurse=True)
+
+    groups = {}
+
+    if not items:
+        return groups  # pragma: no cover
+
+    for item in items:
+        key = item.get("Key", "")
+        if not key.endswith("/config"):
+            continue
+
+        try:
+            node_name = key.split("/")[3]
+        except IndexError:  # pragma: no cover
+            continue  # pragma: no cover
+
+        try:
+            value = item.get("Value")
+            if value:
+                config = json.loads(value.decode("utf-8"))
+                groups[node_name] = config.get("group")
+        except Exception:  # pragma: no cover
+            continue  # pragma: no cover
+
+    return groups
+
+
+def members_in_group(con, hostname):
+    node_groups = get_all_node_groups(con)
+
+    local_group = node_groups.get(hostname)
+
+    if not local_group:
+        return con.agent.members()
+
+    matching_members = []
+
+    for member in con.agent.members():
+        node_name = member.get("Name")
+        group = node_groups.get(node_name)
+
+        if group == local_group:
+            matching_members.append(member)
+
+    return matching_members
+
+
+def check_consul_cluster(con, hostname, ignore_failed_checks: bool) -> None:
     whitelist = get_whitelist(con)
     if whitelist:
         LOG.warning("Status of the following hosts will be ignored, " +
@@ -303,7 +352,7 @@ def check_consul_cluster(con, ignore_failed_checks: bool) -> None:
     if ignore_failed_checks:
         LOG.warning("All consul cluster checks are ignored.")
     else:
-        for member in con.agent.members():
+        for member in members_in_group(con, hostname):
             # Consul member status 1 = Alive, 3 = Left
             if "Status" in member.keys() and member["Status"] not in [1, 3] and member["Name"] not in whitelist:
                 LOG.error("Consul cluster not healthy: Node %s failed. Exit" % member["Name"])
@@ -378,7 +427,7 @@ def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout, group):
         LOG.info("Sleep for 2 minutes. Waiting for consul checks.")
         time.sleep((60 * 2) + 10)
 
-    check_consul_cluster(con, flags.get("ignore_failed_checks"))
+    check_consul_cluster(con, hostname, flags.get("ignore_failed_checks"))
     check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_preboot"])
 
     if not consul_lock.acquired:
@@ -615,7 +664,7 @@ def cli(verbose, consul, consul_port, check_triggers, check_uptime, dryrun, main
              "skip_reboot_in_progress_key": skip_reboot_in_progress_key,
              "group": group}
 
-    check_consul_cluster(con, ignore_failed_checks)
+    check_consul_cluster(con, hostname, ignore_failed_checks)
 
     lock_key = resolve_lock(con, group, hostname)
     # Explicitly disable all health checks on the session. Some scripts may
