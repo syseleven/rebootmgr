@@ -333,13 +333,22 @@ def members_in_group(con, hostname):
         return con.agent.members()
 
     matching_members = []
+    excluded_groups = set()
 
     for member in con.agent.members():
         node_name = member.get("Name")
         group = node_groups.get(node_name)
 
-        if group == local_group:
+        if group == local_group or group is None:
             matching_members.append(member)
+        else:
+            excluded_groups.add(group)  # pragma: no cover
+
+    if excluded_groups:
+        LOG.info(
+            "Excluding members from groups: %s",
+            ", ".join(sorted(excluded_groups))  # pragma: no cover
+        )
 
     return matching_members
 

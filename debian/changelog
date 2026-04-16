@@ -1,3 +1,9 @@
+rebootmgr (0.0.32-0+syseleven1) noble; urgency=medium
+
+  * Exclude other groups from consul health check members
+
+ -- Morteza Bashsiz <m.bashsiz@syseleven.de>  Thu,16 Apr 2026 09:00:00 +0100
+
 rebootmgr (0.0.26-0+syseleven1) focal; urgency=medium
 
   * Implement group integration with rebootmgr
