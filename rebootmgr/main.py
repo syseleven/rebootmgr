@@ -10,6 +10,7 @@ import time
 import colorlog
 import holidays
 import datetime
+from pathlib import Path
 from typing import List
 from typing import Tuple
 
@@ -37,6 +38,9 @@ EXIT_NODE_DISABLED = 101
 EXIT_STOP_FLAG_SET = 102
 EXIT_DID_NOT_REALLY_REBOOT = 103
 EXIT_CONFIGURATION_IS_MISSING = 104
+
+
+IGNORE_LOCAL_CHECKS_PATH = "/var/run/rebootmgr-ignore-local-checks"
 
 
 def logsetup(verbosity):
@@ -126,7 +130,7 @@ def get_whitelist(con) -> List[str]:
     return []
 
 
-def check_consul_services(con, hostname, ignore_failed_checks: bool, tags: List[str], wait_until_healthy=False):
+def check_consul_services(con, hostname, ignore_failed_checks: bool, tags: List[str], wait_until_healthy=False, ignore_local_checks: List[str] = []):
     """
     check all consul services for this node with the tag "rebootmgr"
     """
@@ -151,6 +155,8 @@ def check_consul_services(con, hostname, ignore_failed_checks: bool, tags: List[
                 # If the check is failing because the node is us and it is the
                 # is-in-maintenance-mode check, ignore it.
                 if name == '_node_maintenance' and check["Node"] == hostname:
+                    pass
+                elif name in ignore_local_checks and check["Node"] == hostname:
                     pass
                 else:
                     failed_names.append(name + " on " + check["Node"])
@@ -409,6 +415,24 @@ def _check_and_handle_stop_flag(con, group, hostname, flags):
         sys.exit(EXIT_STOP_FLAG_SET)
 
 
+def _remove_ignore_local_checks_file():
+    ignore_local_checks_path = Path(IGNORE_LOCAL_CHECKS_PATH)
+    if ignore_local_checks_path.is_file() and ignore_local_checks_path.stat().st_size > 0:
+        LOG.info("Deleting %s file" % IGNORE_LOCAL_CHECKS_PATH)
+        ignore_local_checks_path.unlink()
+
+
+def _get_ignore_local_checks():
+    ignore_local_checks = []
+    ignore_local_checks_path = Path(IGNORE_LOCAL_CHECKS_PATH)
+    if ignore_local_checks_path.is_file() and ignore_local_checks_path.stat().st_size > 0:
+        LOG.info("Parsing %s file" % IGNORE_LOCAL_CHECKS_PATH)
+        with ignore_local_checks_path.open("r") as ignore_local_checks_file:
+            for line in ignore_local_checks_file:
+                ignore_local_checks.append(line)
+    return ignore_local_checks
+
+
 def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout, group):
     group_key = resolve_group_key(con, group, hostname)
     today = datetime.date.today()
@@ -430,6 +454,7 @@ def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout, group):
     check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_preboot"])
 
     LOG.info("Executing pre reboot tasks")
+    _remove_ignore_local_checks_file()
     run_tasks("pre_boot", con, hostname, flags.get("dryrun"), task_timeout, group)
 
     if not flags.get("lazy_consul_checks"):
@@ -437,7 +462,11 @@ def pre_reboot_state(con, consul_lock, hostname, flags, task_timeout, group):
         time.sleep((60 * 2) + 10)
 
     check_consul_cluster(con, hostname, flags.get("ignore_failed_checks"))
-    check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_preboot"])
+
+    # Pre reboot scripts may write into /var/run/rebootmgr-ignore-local-checks
+    # the names of the checks that are expected to fail at this stage
+    ignore_local_checks = _get_ignore_local_checks()
+    check_consul_services(con, hostname, flags.get("ignore_failed_checks"), ["rebootmgr", "rebootmgr_preboot"], ignore_local_checks=ignore_local_checks)
 
     if not consul_lock.acquired:
         LOG.error("Lost consul lock. Exit")
