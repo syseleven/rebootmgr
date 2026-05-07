@@ -165,7 +165,7 @@ def check_consul_services(con, hostname, ignore_failed_checks: bool, tags: List[
             if wait_until_healthy:
                 LOG.error("There were failed consul checks (%s). Trying again in 2 minutes.", failed_names)
                 time.sleep(120)
-                check_consul_services(con, hostname, ignore_failed_checks, tags, wait_until_healthy)
+                check_consul_services(con, hostname, ignore_failed_checks, tags, wait_until_healthy, ignore_failed_checks)
             else:
                 LOG.error("There were failed consul checks (%s). Exit.", failed_names)
                 sys.exit(EXIT_CONSUL_CHECKS_FAILED)
@@ -429,7 +429,8 @@ def _get_ignore_local_checks():
         LOG.info("Parsing %s file" % IGNORE_LOCAL_CHECKS_PATH)
         with ignore_local_checks_path.open("r") as ignore_local_checks_file:
             for line in ignore_local_checks_file:
-                ignore_local_checks.append(line)
+                ignore_local_checks.append("service:" + line)
+    LOG.info(f"ignore_local_checks = {ignore_local_checks}")
     return ignore_local_checks
 
 
