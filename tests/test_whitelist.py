@@ -3,6 +3,9 @@ import time
 from rebootmgr.main import cli as rebootmgr
 from consul import Check
 
+from pathlib import Path
+from types import SimpleNamespace
+
 
 def test_reboot_succeeds_with_failing_checks_if_whitelisted(
         run_cli, consul_cluster, forward_consul_port, default_config,
@@ -39,6 +42,69 @@ def test_reboot_succeeds_with_failing_checks_if_ignored(
 
     assert result.exit_code == 0
     assert mocked_run.call_count == 1
+
+
+def test_reboot_succeeds_with_failing_checks_if_local_ignored(
+        run_cli, consul_cluster, forward_consul_port, default_config,
+        reboot_task, mock_subprocess_run, mocker):
+    consul_cluster[0].agent.service.register("A", tags=["rebootmgr"])
+    consul_cluster[1].agent.service.register("A", tags=["rebootmgr"])
+
+    mocker.patch("time.sleep")
+    mocker.patch("subprocess.Popen")
+    mock_subprocess_run(["shutdown", "-r", "+1"])
+
+    def break_consul_service():
+        """ Break consul service A on localhost as soon as "open" is called. """
+        consul_cluster[0].agent.service.deregister("A")
+        consul_cluster[0].agent.service.register("A", tags=["rebootmgr"], check=Check.ttl("1ms"))
+        time.sleep(0.01)
+        import pprint
+        pprint.pp(consul_cluster[0].health.service('A'))
+
+    opener = mocker.mock_open(read_data='A')
+    def mocked_open(self, *args, **kwargs):
+        break_consul_service()
+        return opener(self, *args, **kwargs)
+
+    mocker.patch.object(Path, "unlink")
+    mocker.patch.object(Path, "is_file", return_value=True)
+    mocker.patch.object(Path, "stat", return_value=SimpleNamespace(st_size=1))
+    mocker.patch.object(Path, "open", mocked_open)
+    result = run_cli(rebootmgr, ["-v"])
+
+    assert False
+    assert result.exit_code == 0
+
+
+def test_reboot_fails_with_remote_failing_checks_if_local_ignored(
+        run_cli, consul_cluster, forward_consul_port, default_config,
+        reboot_task, mock_subprocess_run, mocker):
+    consul_cluster[0].agent.service.register("A", tags=["rebootmgr"])
+    consul_cluster[1].agent.service.register("A", tags=["rebootmgr"])
+
+    mocker.patch("time.sleep")
+    mocker.patch("subprocess.Popen")
+    mock_subprocess_run(["shutdown", "-r", "+1"])
+
+    def break_consul_service():
+        """ Break consul service A on the other node as soon as "open" is called. """
+        consul_cluster[1].agent.service.deregister("A")
+        consul_cluster[1].agent.service.register("A", tags=["rebootmgr"], check=Check.ttl("1ms"))
+        time.sleep(0.01)
+
+    opener = mocker.mock_open(read_data='A')
+    def mocked_open(self, *args, **kwargs):
+        break_consul_service()
+        return opener(self, *args, **kwargs)
+
+    mocker.patch.object(Path, "unlink")
+    mocker.patch.object(Path, "is_file", return_value=True)
+    mocker.patch.object(Path, "stat", return_value=SimpleNamespace(st_size=1))
+    mocker.patch.object(Path, "open", mocked_open)
+    result = run_cli(rebootmgr, ["-v"])
+
+    assert result.exit_code == 2
 
 
 def test_reboot_fails_with_failing_checks(
@@ -119,6 +185,3 @@ def test_reboot_succeeds_with_failing_consul_cluster_if_ignored(
     assert result.exit_code == 0
     assert mocked_run.call_count == 1
 
-
-# TODO(oseibert): Test cases where consul service checks succeed/fail after the
-#  (2 * 60) + 10 seconds sleeping time, when they are done the second time.
