@@ -429,7 +429,7 @@ def _get_ignore_local_checks():
         LOG.info("Parsing %s file" % IGNORE_LOCAL_CHECKS_PATH)
         with ignore_local_checks_path.open("r") as ignore_local_checks_file:
             for line in ignore_local_checks_file:
-                ignore_local_checks.append("service:" + line)
+                ignore_local_checks.append("service:" + line.rstrip())
     LOG.info(f"ignore_local_checks = {ignore_local_checks}")
     return ignore_local_checks
 
